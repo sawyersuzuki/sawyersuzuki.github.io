@@ -245,15 +245,6 @@ nav {
   z-index: 50;
 }
 
-.layer-label {
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  margin-right: 0.25rem;
-  user-select: none;
-}
-
 .layer-btn {
   background: rgba(10, 15, 30, 0.75);
   border: 1px solid var(--border);

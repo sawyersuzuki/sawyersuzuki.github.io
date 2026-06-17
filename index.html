@@ -47,16 +47,11 @@
     </div>
   </main>
 
-  <!-- Layer toggle controls (only shown on home page) -->
+  <!-- Layer toggle -->
   <div class="layer-controls">
-    <span class="layer-label">Layers</span>
     <button class="layer-btn" id="btn-temp"
       onclick="temperatureLayer.toggle(); this.classList.toggle('active')">
-      Temp
-    </button>
-    <button class="layer-btn" id="btn-wind"
-      onclick="windLayer.toggle(); this.classList.toggle('active')">
-      Wind
+      Temperature
     </button>
   </div>
 
@@ -64,10 +59,8 @@
   <script src="https://unpkg.com/globe.gl@2/dist/globe.gl.min.js"></script>
   <script src="js/globe.js"></script>
   <script src="js/layers/temperature.js"></script>
-  <script src="js/layers/wind.js"></script>
   <script>
     temperatureLayer.init(window.__globe);
-    windLayer.init(window.__globe);
   </script>
 </body>
 </html>
