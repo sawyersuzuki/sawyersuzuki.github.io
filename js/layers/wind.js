@@ -72,7 +72,7 @@
 
       ensureData().then(data => {
         const grid = interpolateGrid(data, TARGET_STEP);
-        const arcs = grid.map(d => {
+        const arcs = grid.filter((_, i) => i % 4 !== 0).map(d => {
           const coslat = Math.max(0.05, Math.cos(d.lat * Math.PI / 180));
           return {
             startLat:  d.lat,
