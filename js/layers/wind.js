@@ -1,16 +1,20 @@
 /**
  * Wind layer — animated 10m wind vectors on the globe.
  *
- * Lazy-loaded: data/weather.json is only fetched the first time this layer
- * is shown. Arc colors are precomputed once so Globe.gl does zero color
- * computation during rendering.
+ * Uses Globe.gl's arcsData API with animated dash patterns.
+ * 20° sparse grid (~153 arcs), precomputed colours, fixed animation time.
  *
- * Resolution: 20° grid (≈ 162 arcs) — readable density, smooth frame rate.
+ * Note on units: weather.json stores windspeed (spd/u/v) in km/h because
+ * Open-Meteo's current_weather object returns km/h by default. SCALE and
+ * the colour normalization are adjusted accordingly:
+ *   SCALE        0.18 deg/(km/h)  ≡ the original 0.65 deg/(m/s)
+ *   colour norm  speed/50 km/h    ≡ the original speed/14 m/s
  */
 (function () {
   'use strict';
 
-  const GRID_STEP = 20; // degrees — sparse enough for smooth animation
+  const GRID_STEP = 20;   // degrees — subsample from 10° weather.json grid
+  const SCALE     = 0.18; // visual degrees per km/h  (≈ 0.65 deg per m/s)
 
   function ensureData() {
     window.__weatherDataPromise = window.__weatherDataPromise
@@ -19,8 +23,8 @@
   }
 
   // Precomputed once per arc; never called again during rendering.
-  function windColor(speed, alpha) {
-    const norm = Math.min(1, speed / 14);
+  function windColor(speedKmh, alpha) {
+    const norm = Math.min(1, speedKmh / 50);  // 50 km/h ≈ 14 m/s → full brightness
     const r = Math.round(norm * 80);
     const g = Math.round(160 + norm * 95);
     return `rgba(${r},${g},255,${alpha !== undefined ? alpha : 0.35 + norm * 0.55})`;
@@ -33,7 +37,6 @@
 
     init(globe) {
       this._globe = globe;
-      // No fetch here — wait until the user actually toggles the layer.
     },
 
     _load() {
@@ -41,21 +44,19 @@
       this._loaded = true;
 
       ensureData().then(data => {
-        const SCALE = 0.65; // visual degrees per m/s
-
         const arcs = data
           .filter(d => d.lat % GRID_STEP === 0 && d.lon % GRID_STEP === 0)
           .map(d => {
             const speed  = d.spd || Math.sqrt(d.u ** 2 + d.v ** 2);
             const coslat = Math.max(0.05, Math.cos(d.lat * Math.PI / 180));
             return {
-              startLat:   d.lat,
-              startLng:   d.lon,
-              endLat:     Math.max(-88, Math.min(88, d.lat + d.v * SCALE)),
-              endLng:     d.lon + (d.u * SCALE) / coslat,
-              colorTail:  windColor(speed, 0.04),  // precomputed
-              colorHead:  windColor(speed),          // precomputed
-              stroke:     0.3 + Math.min(0.4, speed / 25),  // precomputed
+              startLat:  d.lat,
+              startLng:  d.lon,
+              endLat:    Math.max(-88, Math.min(88, d.lat + d.v * SCALE)),
+              endLng:    d.lon + (d.u * SCALE) / coslat,
+              colorTail: windColor(speed, 0.04),   // precomputed
+              colorHead: windColor(speed),           // precomputed
+              stroke:    0.3 + Math.min(0.4, speed / 80),  // precomputed
             };
           });
 
