@@ -1,4 +1,4 @@
-# sawyersuzuki.github.io
+# sawyersuzuki.github.io / sawyersuzuki.com
 
 
 ## My personal site.
