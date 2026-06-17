@@ -1,7 +1,7 @@
 (function () {
   'use strict';
 
-  const TARGET_STEP = 3;   // interpolated grid step in degrees (~10x denser than raw 10° data)
+  const TARGET_STEP = 5;   // interpolated grid step in degrees (~2400 vectors)
   const SOURCE_STEP = 10;  // weather.json grid step
   const SCALE = 0.18;      // visual degrees per km/h
 
