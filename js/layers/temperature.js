@@ -1,43 +1,50 @@
 /**
  * Temperature layer — 2m temperature heatmap on the globe.
  *
- * Lazy-loaded: data/weather.json is only fetched the first time this layer
- * is shown. Colors are precomputed once and stored on each datum so Globe.gl
- * does zero computation on every subsequent render frame.
+ * Data source: data/weather.json (Celsius, real Open-Meteo forecast data,
+ * refreshed daily by the GitHub Action in .github/workflows/update-weather.yml).
  *
- * Resolution: 10° grid (≈ 612 cells) — fine enough to read the pattern,
- * light enough for smooth 60 fps.
+ * Color scale covers the full observed global surface range: -70°C → +50°C.
+ * Colors are precomputed once on data load; Globe.gl accessors do zero
+ * computation per render frame.
+ *
+ * Lazy-loaded: fetch only starts when the layer is first toggled.
  */
 (function () {
   'use strict';
 
-  const GRID_STEP = 10; // degrees — subsampled from the 5° weather.json grid
-  const CELL_HALF = GRID_STEP / 2;
+  const GRID_STEP = 10; // degrees — matches the 10° fetch grid
 
-  // Shared lazy promise — created only on first show(), shared with wind.js
   function ensureData() {
     window.__weatherDataPromise = window.__weatherDataPromise
       || fetch('./data/weather.json').then(r => r.json());
     return window.__weatherDataPromise;
   }
 
-  // Interpolated colormap: cold blue → cyan → green → yellow → hot red
-  // Precompute once per datum; never called again during rendering.
+  // Scientific colormap for surface air temperature (Celsius).
+  // Spans -70°C (Antarctic plateau) → +50°C (hot desert surface).
+  // Follows the conventional meteorological blue-cyan-green-yellow-red scale.
+  // Precomputed once per datum; never called again during rendering.
   function tempColor(t) {
     const stops = [
-      [-40, [20,  40, 200]],
-      [-20, [0,  100, 255]],
-      [ -5, [0,  210, 255]],
-      [ 10, [40, 230,  80]],
-      [ 22, [255, 230,  0]],
-      [ 30, [255, 100,  0]],
-      [ 40, [180,   0,  0]],
+      [-70, [ 20,   0,  80]],  // deep indigo  (Antarctic extremes)
+      [-50, [  0,  30, 180]],  // dark blue
+      [-30, [  0, 100, 255]],  // blue
+      [-10, [  0, 210, 240]],  // cyan
+      [  0, [ 80, 220, 180]],  // cyan-green   (freezing point)
+      [ 10, [ 60, 200,  60]],  // green
+      [ 20, [220, 220,   0]],  // yellow
+      [ 30, [255, 130,   0]],  // orange
+      [ 40, [220,  30,   0]],  // red
+      [ 50, [120,   0,  20]],  // deep red     (desert extremes)
     ];
-    const alpha = 0.46;
+    const alpha = 0.50;
+
     if (t <= stops[0][0])
       return `rgba(${stops[0][1]},${alpha})`;
     if (t >= stops[stops.length - 1][0])
       return `rgba(${stops[stops.length - 1][1]},${alpha})`;
+
     for (let i = 0; i < stops.length - 1; i++) {
       const [t0, c0] = stops[i];
       const [t1, c1] = stops[i + 1];
@@ -52,13 +59,12 @@
   }
 
   window.temperatureLayer = {
-    active:       false,
-    _globe:       null,
-    _loaded:      false,
+    active:  false,
+    _globe:  null,
+    _loaded: false,
 
     init(globe) {
       this._globe = globe;
-      // No fetch here — wait until the user actually toggles the layer.
     },
 
     _load() {
@@ -66,19 +72,17 @@
       this._loaded = true;
 
       ensureData().then(data => {
-        // Subsample to GRID_STEP resolution; precompute color strings.
-        const cells = data
-          .filter(d => d.lat % GRID_STEP === 0 && d.lon % GRID_STEP === 0)
-          .map(d => ({
-            color:   tempColor(d.t),   // computed once, reused every frame
-            polygon: [[
-              [d.lon - CELL_HALF, d.lat - CELL_HALF],
-              [d.lon + CELL_HALF, d.lat - CELL_HALF],
-              [d.lon + CELL_HALF, d.lat + CELL_HALF],
-              [d.lon - CELL_HALF, d.lat + CELL_HALF],
-              [d.lon - CELL_HALF, d.lat - CELL_HALF],
-            ]],
-          }));
+        const HALF = GRID_STEP / 2;
+        const cells = data.map(d => ({
+          color:   tempColor(d.t),   // precomputed — zero cost at render time
+          polygon: [[
+            [d.lon - HALF, d.lat - HALF],
+            [d.lon + HALF, d.lat - HALF],
+            [d.lon + HALF, d.lat + HALF],
+            [d.lon - HALF, d.lat + HALF],
+            [d.lon - HALF, d.lat - HALF],
+          ]],
+        }));
         this._globe.__tempCells = cells;
         if (this.active) this._apply();
       });
@@ -88,7 +92,7 @@
       this._globe
         .polygonsData(this._globe.__tempCells)
         .polygonGeoJsonGeometry(d => ({ type: 'Polygon', coordinates: d.polygon }))
-        .polygonCapColor(d => d.color)   // simple property lookup — zero CPU cost
+        .polygonCapColor(d => d.color)   // property lookup only — no computation
         .polygonSideColor(() => 'transparent')
         .polygonStrokeColor(() => false)
         .polygonAltitude(0.001);
