@@ -13,7 +13,7 @@
 (function () {
   'use strict';
 
-  const GRID_STEP = 20;   // degrees — subsample from 10° weather.json grid
+  const GRID_STEP = 10;   // degrees — full 10° weather.json grid resolution
   const SCALE     = 0.18; // visual degrees per km/h  (≈ 0.65 deg per m/s)
 
   function ensureData() {
