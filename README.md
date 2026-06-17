@@ -1,4 +1,1 @@
-# sawyersuzuki.github.io / sawyersuzuki.com
-
-
-## My personal site.
+## My personal site. Projects and thoughts.
