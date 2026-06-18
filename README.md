@@ -1,1 +1,1 @@
-## My personal site. Projects and thoughts.
+## My personal site. Some side projects and thoughts.
