@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Fetch global 2m-temperature data from Open-Meteo (free, no API key) and
-write data/weather.json for the globe visualisation.
+Fetch global 2m-temperature and 500 hPa wind data from Open-Meteo (free, no
+API key) and write data/weather.json for the globe visualisation.
 
 Uses a 10°×10° global grid (~595 points) and concurrent requests so the
 whole fetch completes in ~20–30 seconds. Intended to be run daily via the
@@ -22,8 +22,9 @@ from urllib.parse import urlencode
 from pathlib import Path
 
 # ── Config ─────────────────────────────────────────────────────────────────
-GRID_STEP   = 10    # degrees; 10 → ~595 pts, 5 → ~2520 pts (slower)
-MAX_WORKERS = 12    # concurrent HTTP connections
+GRID_STEP   = 10       # degrees; 10 → ~595 pts, 5 → ~2520 pts (slower)
+MAX_WORKERS = 12       # concurrent HTTP connections
+WIND_LEVEL  = "500hPa" # pressure level for wind (~5,500m / mid-troposphere)
 OUT_FILE    = Path(__file__).parent.parent / "data" / "weather.json"
 # ───────────────────────────────────────────────────────────────────────────
 
@@ -33,26 +34,25 @@ BASE = "https://api.open-meteo.com/v1/forecast"
 
 
 def fetch_point(lat, lon):
-    """Return a dict with temperature (°C) and wind u/v (m/s), or None on failure."""
+    """Return a dict with 2m temperature (°C) and WIND_LEVEL wind u/v (km/h), or None on failure."""
     params = urlencode({
         "latitude": lat, "longitude": lon,
-        "current_weather": "true",
-        "hourly": "temperature_2m",
+        "hourly": f"temperature_2m,wind_speed_{WIND_LEVEL},wind_direction_{WIND_LEVEL}",
         "forecast_days": 1,
         "timezone": "UTC",
     })
     with urlopen(f"{BASE}?{params}", timeout=15) as r:
         d = json.loads(r.read())
 
-    cw = d.get("current_weather", {})
-    t  = d.get("hourly", {}).get("temperature_2m", [None])[0]
-    if t is None:
-        t = cw.get("temperature")
-    if t is None:
+    hourly = d.get("hourly", {})
+    t  = hourly.get("temperature_2m", [None])[0]
+    ws = hourly.get(f"wind_speed_{WIND_LEVEL}", [None])[0]
+    wd = hourly.get(f"wind_direction_{WIND_LEVEL}", [None])[0]
+    if t is None or ws is None or wd is None:
         return None
 
-    ws   = float(cw.get("windspeed", 0))
-    wd_r = math.radians(float(cw.get("winddirection", 0)))
+    ws   = float(ws)
+    wd_r = math.radians(float(wd))
     return {
         "lat": lat, "lon": lon,
         "t":   round(float(t), 1),
