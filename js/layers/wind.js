@@ -72,7 +72,15 @@
 
       ensureData().then(data => {
         const grid = interpolateGrid(data, TARGET_STEP);
-        const arcs = grid.filter((_, i) => i % 4 !== 0).map(d => {
+        // Keep 21 of every 40 points (52.5% of the grid = 70% of the old
+        // 75% thinning). Thinning by lat/lon index (not flat array index)
+        // with coprime-to-40 coefficients spreads drops evenly in both
+        // directions instead of leaving blank longitude/latitude bands.
+        const arcs = grid.filter(d => {
+          const latIdx = Math.round((d.lat + 80) / TARGET_STEP);
+          const lonIdx = Math.round((d.lon + 180) / TARGET_STEP);
+          return ((latIdx + lonIdx) * 19) % 40 < 21;
+        }).map(d => {
           const coslat = Math.max(0.05, Math.cos(d.lat * Math.PI / 180));
           return {
             startLat:  d.lat,
