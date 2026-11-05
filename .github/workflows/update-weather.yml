@@ -1,9 +1,10 @@
 name: Update weather data
 
 on:
-  schedule:
-    - cron: '0 6 * * *'   # daily at 06:00 UTC
-  workflow_dispatch:        # also triggerable manually from GitHub UI
+  # Scheduled run disabled to stop Actions usage charges; re-add to resume:
+  # schedule:
+  #   - cron: '0 6 * * *'   # daily at 06:00 UTC
+  workflow_dispatch:        # manually triggerable from GitHub UI
 
 jobs:
   fetch:
