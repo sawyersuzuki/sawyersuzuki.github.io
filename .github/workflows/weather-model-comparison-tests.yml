@@ -1,0 +1,23 @@
+name: Weather Model Comparison tests
+
+on:
+  push:
+    paths: ["projects/weather-model-comparison/src/**", "projects/weather-model-comparison/tests/**", "projects/weather-model-comparison/pyproject.toml", ".github/workflows/weather-model-comparison-tests.yml"]
+  pull_request:
+    paths: ["projects/weather-model-comparison/**"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: projects/weather-model-comparison
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -e ".[dev]"
+      - run: pytest -q

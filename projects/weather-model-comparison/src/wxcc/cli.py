@@ -11,7 +11,7 @@ from .models import ALL_MODELS, ANALYSIS_MODELS, DEFAULT_UPDATE_MODELS, FORECAST
 from .regions import REGIONS
 
 app = typer.Typer(add_completion=False, no_args_is_help=True,
-                  help="CONUS weather-model comparison command center.")
+                  help="Weather Model Comparison: CONUS weather models compared by degree days.")
 pd.set_option("display.width", 200, "display.max_rows", 500, "display.max_columns", 30)
 
 
@@ -156,11 +156,16 @@ def market() -> None:
 
 
 @app.command()
-def build() -> None:
+def build(
+    out_dir: str = typer.Option("site", "--out", help="Folder to write index.html into"),
+    home_link: str = typer.Option("", help="URL for a link back to the website, e.g. /projects.html"),
+) -> None:
     """Rebuild the dashboard (site/index.html) from what is stored."""
+    from pathlib import Path
+
     from . import build as builder
 
-    out = builder.build()
+    out = builder.build(site=Path(out_dir), home_link=home_link or None)
     typer.echo(f"Wrote {out} ({out.stat().st_size / 1e6:.1f} MB). Open it in a browser, or run `wxcc serve`.")
 
 

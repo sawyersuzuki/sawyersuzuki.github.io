@@ -1,5 +1,7 @@
 # Decisions
 
+**Moved 2026-11-15.** This project started as the repository `sawyersuzuki/wx-command-center` (named "Wx Command Center") and now lives in `projects/weather-model-comparison/` of the website repository, renamed "Weather Model Comparison". Its full history was merged in. Notes below that mention the old repository describe how things were at the time.
+
 Assumptions, changes to the original brief, and trade-offs. Facts marked "checked" were verified against the source on 2026-11-15.
 
 ## Changes to the brief
@@ -117,3 +119,12 @@ The brief said private; the repository was created **public** (checked through t
 - The open licence question (series derived from NOAA's runs of Pangu-Weather and GraphCast) was meant to be settled before going public. The files hold only aggregated regional numbers computed from NOAA's public output, which is low risk, but it is your call.
 - On the plus side, a public repository gets free Actions minutes and can use Pages.
 - To make it private: Settings > General > Danger Zone > Change repository visibility. Nothing in the code depends on which you choose; a private repo simply skips Pages.
+
+## Move into the website (2026-11-15)
+
+- **Where:** pipeline source and data in `projects/weather-model-comparison/`; the built dashboard is published at `/projects/weather-model-comparison/` and linked from a card at the top of `projects.html`, with a link back.
+- **How it is published:** the workflow builds the dashboard and deploys the website through GitHub Actions instead of committing the built page. The page is 7 MB and its map section changes completely every day, so committing it twice a day would have grown the repository by roughly 1 GB a year. Only the small data files are committed (about 15 MB a year).
+- **Assembled site:** every tracked website file except the pipeline source, `.github/`, `scripts/` and the README, plus the built dashboard. The `data/weather.json` globe data is unaffected.
+- **Not renamed:** the Python package and command are still `wxcc`. They are internal, and renaming would only churn every command in the docs; easy to change later.
+- **Map bundles** now go to this repository's Releases; the November 2026 bundles stayed with the old repository, and the first manual run regenerates them.
+- **Existing globe workflow** (`update-weather.yml`, manual only): its commits no longer redeploy the site on their own, because pushes made by a workflow do not trigger other workflows. The next scheduled run (at most 12 hours later) publishes them, or run "Weather Model Comparison" by hand.

@@ -1,7 +1,7 @@
 [project]
 name = "wxcc"
 version = "0.1.0"
-description = "CONUS weather-model comparison: degree days, forecast verification, extreme events"
+description = "Weather Model Comparison: CONUS weather models compared by degree days, verification and extreme events"
 requires-python = ">=3.11"
 dependencies = [
     "numpy>=1.26",

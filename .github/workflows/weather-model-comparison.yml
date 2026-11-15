@@ -1,0 +1,105 @@
+name: Weather Model Comparison
+
+# Twice a day, a few hours after the 00Z and 12Z model runs are published: fetch new runs,
+# truth and market data, commit the small derived data, rebuild the dashboard and publish
+# the whole website to GitHub Pages. A push to main only rebuilds and publishes.
+# Pipeline source: projects/weather-model-comparison/. Free on a public repository.
+on:
+  schedule:
+    - cron: "17 10 * * *"
+    - cron: "17 22 * * *"
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      backfill_start:
+        description: "Optional: also backfill 00Z runs from this date (YYYY-MM-DD), regenerating their maps"
+        required: false
+        default: ""
+      backfill_end:
+        description: "Optional: last date of that backfill (YYYY-MM-DD)"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: website-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        working-directory: projects/weather-model-comparison
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: pip install -e .
+      - name: Restore recent maps from Releases
+        run: wxcc fields pull || true
+      - name: Optional backfill (manual runs only)
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.backfill_start != '' && inputs.backfill_end != '' }}
+        env:
+          START: ${{ inputs.backfill_start }}
+          END: ${{ inputs.backfill_end }}
+        run: |
+          wxcc backfill --model all --start "$START" --end "$END" --cycles 0 --refresh --yes
+          wxcc backfill --model era5 --start "$START" --end "$END" --refresh --yes
+      - name: Fetch latest runs, truth and market data
+        if: ${{ github.event_name != 'push' }}
+        run: wxcc update
+      - name: Publish maps to Releases
+        if: ${{ github.event_name != 'push' }}
+        run: wxcc fields publish ${{ github.event_name == 'workflow_dispatch' && inputs.backfill_start != '' && '--all' || '' }} || true
+      - name: Commit data
+        if: ${{ github.event_name != 'push' }}
+        run: |
+          git config user.name "wxcc-bot"
+          git config user.email "wxcc-bot@users.noreply.github.com"
+          git add data
+          if git diff --cached --quiet; then
+            echo "No new data."
+          else
+            git commit -q -m "Weather data update $(date -u +%Y-%m-%dT%HZ)"
+            git pull -q --rebase
+            git push -q
+          fi
+      - name: Build the dashboard
+        run: wxcc build --out site --home-link /projects.html
+      - name: Assemble the website
+        working-directory: .
+        run: |
+          # every tracked website file except the pipeline source, workflows and scripts
+          git ls-files | grep -v -E '^(projects/weather-model-comparison/|\.github/|scripts/|README\.md$|\.gitignore$)' \
+            | while read -r f; do mkdir -p "_site/$(dirname "$f")"; cp "$f" "_site/$f"; done
+          mkdir -p _site/projects/weather-model-comparison
+          cp projects/weather-model-comparison/site/index.html _site/projects/weather-model-comparison/index.html
+          touch _site/.nojekyll
+          find _site -type f | sort
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    if: ${{ github.ref == 'refs/heads/main' }}
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

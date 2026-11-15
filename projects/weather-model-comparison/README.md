@@ -1,10 +1,18 @@
-# wx-command-center
+# Weather Model Comparison
 
-A personal command center for comparing weather models over the contiguous US, built around extreme cold and heat: where the models disagree, how their forecasts verified, how they handled past events, and how all of that lines up with gas and power prices.
+Live at [sawyersuzuki.com/projects/weather-model-comparison](https://sawyersuzuki.com/projects/weather-model-comparison/).
+
+A personal dashboard for comparing weather models over the contiguous US, built around extreme cold and heat: where the models disagree, how their forecasts verified, how they handled past events, and how all of that lines up with gas and power prices.
 
 Everything runs on free public data with no API keys. [DECISIONS.md](DECISIONS.md) records the assumptions, the changes made to the original brief, and what has and has not been verified.
 
 ## Quick start
+
+This pipeline lives in the `projects/weather-model-comparison/` folder of the website repository; run every command from that folder.
+
+```bash
+cd projects/weather-model-comparison
+```
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
@@ -20,7 +28,7 @@ uv venv && uv pip install -e ".[dev]"
 
 `update` fetches the newest runs of every model, refreshes the truth series and market data, and takes under a minute. `serve` rebuilds the dashboard and opens it at http://localhost:8765. The dashboard is a single file, `site/index.html`, which also opens directly in a browser with no server.
 
-The repository's scheduled workflow runs `update` twice a day and commits the result, so on most days `git pull` followed by `wxcc serve` is all you need.
+The website's scheduled workflow runs `update` twice a day, commits the result and republishes the site, so the live page is always current. Locally, `git pull` followed by `wxcc serve` is all you need.
 
 Maps are kept out of git. On a fresh clone the Maps tab is empty until you run `wxcc fields pull` (needs the GitHub CLI, signed in) or `wxcc update` picks up the next 00Z runs.
 
@@ -104,7 +112,11 @@ Downloads are streamed and cropped to CONUS in memory; no global file is ever wr
 
 ## Automation
 
-`.github/workflows/update.yml` runs at 10:17 and 22:17 UTC: update, build, publish maps, commit data. It uses about 300 of the 2,000 free Actions minutes a month on a private repository. The built dashboard is attached to each run as a downloadable artifact. The same workflow can deploy the dashboard to GitHub Pages; that needs a public repository, Pages enabled (Settings > Pages > Source: GitHub Actions) and a repository variable `DEPLOY_PAGES` set to `true`. A manual run of the workflow also accepts a date range to backfill 00Z runs and regenerate their maps.
+`.github/workflows/weather-model-comparison.yml` (at the root of the website repository) runs at 10:17 and 22:17 UTC: update, publish maps, commit data, build the dashboard with a link back to the Projects page, and deploy the whole website to GitHub Pages. A push to `main` (for example an edit to `projects.html`) rebuilds and redeploys without fetching data. Actions minutes are free because the repository is public. A manual run also accepts a date range to backfill 00Z runs and regenerate their maps.
+
+The site is deployed by this workflow rather than straight from the branch, so the 7 MB dashboard is never committed: only the small data files are. That needs Settings > Pages > Source set to **GitHub Actions** (one-time).
+
+`wxcc build --out <folder> --home-link <url>` writes the page anywhere and adds the link back to the website.
 
 ## Data sources and attribution
 

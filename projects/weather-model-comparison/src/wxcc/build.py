@@ -231,10 +231,16 @@ def assemble(root: Path = store.ROOT) -> dict:
     return data
 
 
-def build(site: Path = SITE, root: Path = store.ROOT) -> Path:
+def build(site: Path = SITE, root: Path = store.ROOT, home_link: str | None = None) -> Path:
+    """Write the dashboard. ``home_link`` adds a link back to the website above the title."""
+    import html
+
     data = assemble(root)
     payload = json.dumps(data, separators=(",", ":")).replace("</", "<\\/")
     template = TEMPLATE.read_text().replace("/*__DATA__*/null", payload)
+    if home_link:
+        link = f'<a class="home-link" href="{html.escape(home_link, quote=True)}">&larr; Sawyer Suzuki &middot; Projects</a>'
+        template = template.replace("<!--HOME_LINK-->", link)
     head, body = template.split("<!--BODY-->", 1)
     site.mkdir(parents=True, exist_ok=True)
     # fragment.html has no outer <html> wrapper, for hosts that add their own
