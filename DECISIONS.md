@@ -93,10 +93,27 @@ Day-to-day variation matches closely (Uri's peak day in West South Central: 49.9
 ## Things that are not done or not verified
 
 - **Colab GPU runs.** The notebooks were executed on CPU with a test model only. No GPU model has been run, so memory fit and compute-unit costs are estimates. CorrDiff in particular may not fit a Colab Pro GPU.
-- **Map bundles on GitHub Releases.** The cloud session that built this is not allowed to create releases, so `wxcc fields publish` and `pull` have not been exercised, and the maps for the backfilled history exist only in that session's cache. The scheduled workflow publishes maps from its first run onward. Historical maps can be regenerated with `wxcc backfill --refresh` for the dates wanted; the dashboard's map view only needs the latest run.
-- **Scheduled workflow.** See the note at the end of this file for the result of its first run.
+- **Historical maps.** The cloud session that built this is not allowed to create releases, so the maps for the backfilled history (0.65 GB) stayed in that session's cache and were not uploaded. Only November 2026 onward is on Releases. To regenerate older maps, run the workflow manually with a date range, or `wxcc backfill --refresh` locally followed by `wxcc fields publish --all`. The dashboard's map view only needs the latest run.
+- **The schedule itself.** The workflow was run by hand three times (see below); the first run on its timer had not happened when this was written.
 - **Ensembles** (IFS ENS, AIFS ENS, GEFS): deferred, as the brief allowed.
 - **Precipitation and wind maps:** deferred to a later phase, as the brief allowed. The adapters fetch one GRIB field by name, so adding a variable is a small change.
 - **ERCOT and PJM prices; Henry Hub futures:** need keys or paid data.
 - **Event dates** other than Winter Storm Fern were set from memory and then checked only against the ERA5 series (each window does contain a clear peak). They were not checked against published storm reports.
 - **Colab plan details:** Google's FAQ confirms that Pro notebooks run at most 12 hours and that background execution is a higher-plan feature; compute-unit prices and burn rates come from third-party reports.
+
+## Automation test (2026-11-15)
+
+The update workflow was triggered manually three times on GitHub's runners:
+
+1. Update, build, commit: passed in 40 s. The Pages job then failed because Pages was not enabled, which marked the run as failed. Fixed by making Pages opt-in through the `DEPLOY_PAGES` repository variable.
+2. With a one-day backfill: passed in 71 s, created the `fields-2026` release and uploaded eight map bundles, committed data.
+3. Plain run: restored those eight bundles from the release, updated, built a 7.1 MB dashboard with maps, found no new data to commit.
+
+## Repository visibility
+
+The brief said private; the repository was created **public** (checked through the GitHub API on 2026-11-15). Consequences:
+
+- Everything pushed so far is publicly readable: code, the regional degree-day series, market CSVs, these notes. No secrets or personal details are in the repository.
+- The open licence question (series derived from NOAA's runs of Pangu-Weather and GraphCast) was meant to be settled before going public. The files hold only aggregated regional numbers computed from NOAA's public output, which is low risk, but it is your call.
+- On the plus side, a public repository gets free Actions minutes and can use Pages.
+- To make it private: Settings > General > Danger Zone > Change repository visibility. Nothing in the code depends on which you choose; a private repo simply skips Pages.
