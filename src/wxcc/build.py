@@ -80,7 +80,7 @@ def normals_block(truth: dict) -> dict:
     """Day-of-year normals: mean over NORMAL_YEARS of a centred 15-day window."""
     days = truth["_days"]
     sel = (days.year >= NORMAL_YEARS[0]) & (days.year <= NORMAL_YEARS[1]) & np.isin(truth["_quality"], ["f", "p"])
-    doy = np.minimum(days.dayofyear.to_numpy(), 366)
+    doy = np.minimum(days.day_of_year.to_numpy(), 366)
     out = {}
     for v in ("hdd", "cdd"):
         a = truth["_arrays"][v]
@@ -181,6 +181,21 @@ def inventory_block(root: Path) -> list[dict]:
     return rows
 
 
+def lab_block() -> list[dict]:
+    """Runs made in the Colab lab, newest first, with what they cost."""
+    manifests = store.read_manifests()
+    if manifests.empty:
+        return []
+    lab = manifests[manifests["model"].str.startswith("lab_")].sort_values("written_at", ascending=False)
+    out = []
+    for rec in lab.head(50).to_dict("records"):
+        detail = rec.get("detail") or {}
+        out.append({"model": rec["model"], "init_time": rec["init_time"], "written_at": rec["written_at"],
+                    "gpu": detail.get("gpu"), "run_s": detail.get("run_s"), "session_s": detail.get("session_s"),
+                    "units": detail.get("est_compute_units"), "source": detail.get("initial_conditions") or detail.get("input")})
+    return out
+
+
 def assemble(root: Path = store.ROOT) -> dict:
     truth = truth_block(root)
     normals = normals_block(truth)
@@ -204,6 +219,7 @@ def assemble(root: Path = store.ROOT) -> dict:
         "events": events.as_dicts(),
         "maps": maps_block(order),
         "inventory": inventory_block(root),
+        "lab": lab_block(),
         "market": None,
     }
     try:

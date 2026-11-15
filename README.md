@@ -1,60 +1,115 @@
 # wx-command-center
 
-A personal command center for comparing weather models over the contiguous US, focused on extreme heat and cold: where models disagree, how forecasts verified, and eventually how that links to gas and power prices.
+A personal command center for comparing weather models over the contiguous US, built around extreme cold and heat: where the models disagree, how their forecasts verified, how they handled past events, and how all of that lines up with gas and power prices.
 
-**Status:** phase 1 of 5 complete (degree-day engine, ERA5 truth, validation). See [DECISIONS.md](DECISIONS.md) for assumptions and trade-offs.
+Everything runs on free public data with no API keys. [DECISIONS.md](DECISIONS.md) records the assumptions, the changes made to the original brief, and what has and has not been verified.
 
-## Setup
+## Quick start
 
 ```bash
 uv venv && uv pip install -e ".[dev]"
 ```
 
 ```bash
-.venv/bin/python -m pytest
+.venv/bin/wxcc update
 ```
+
+```bash
+.venv/bin/wxcc serve
+```
+
+`update` fetches the newest runs of every model, refreshes the truth series and market data, and takes under a minute. `serve` rebuilds the dashboard and opens it at http://localhost:8765. The dashboard is a single file, `site/index.html`, which also opens directly in a browser with no server.
+
+The repository's scheduled workflow runs `update` twice a day and commits the result, so on most days `git pull` followed by `wxcc serve` is all you need.
 
 ## Commands
 
-```bash
-wxcc backfill --model era5 --start 2025-01-01 --end 2025-03-31
-```
+| Command | What it does |
+|---|---|
+| `wxcc update` | The daily job: latest runs of all models, truth, market data. Safe to run any number of times. |
+| `wxcc backfill --model aifs --start 2025-01-01 --end 2025-03-31` | Extend history. Prints download size, disk use and runtime, then asks. Skips what is stored; safe to interrupt and re-run. `--model all` covers every forecast model; `--cycles 0` limits to 00Z runs. |
+| `wxcc query --model gfs --region TX --init 2026-11-15T00` | Ask what is stored. Filters: `--model --region --start --end --init --method`; `--csv` for export. |
+| `wxcc inventory` | Date ranges and run counts per model. |
+| `wxcc models` | Every model: source, licence, how far back its free archive goes. |
+| `wxcc build` / `wxcc serve` | Rebuild the dashboard / rebuild and serve it locally. |
+| `wxcc market` | Refresh Henry Hub, EIA storage and power prices only. |
+| `wxcc fields status` / `publish` / `pull` | Daily temperature maps: local cache, and long-term copies on GitHub Releases. |
+| `wxcc validate --start ... --end ...` | Compare ERA5 degree days with NOAA CPC. |
+| `wxcc validate-stations --month 2026-01` | Compare ERA5 with 31 big-city airport stations. |
 
-Prints the download size, repo growth and runtime, then asks before starting. Safe to re-run: stored days are skipped, and preliminary ERA5 days are refreshed once final data exists. Add `--method minmax1h` for the NOAA-style (Tmax+Tmin)/2 definition, `--yes` to skip the prompt.
+In a notebook, the same query layer is `from wxcc import store; store.query(model="gfs", region="TX")`, which returns a pandas DataFrame.
 
-```bash
-wxcc query --model era5 --region WSC --start 2021-02-10 --end 2021-02-20
-```
+## Models and how far back each goes
 
-```bash
-wxcc inventory
-```
+| Model | Type | Free archive starts | Lead |
+|---|---|---|---|
+| GFS | physics, NOAA | Jan 2021 | 16 days |
+| IFS HRES | physics, ECMWF | Jan 2023 | 10 days |
+| AIFS | AI, ECMWF | Mar 2024 | 15 days |
+| AIGFS | AI, NOAA (GraphCastGFS before Apr 2026) | Feb 2024 | 16 days |
+| GraphCast | AI, run by NOAA/CIRA from GFS analysis | Jan 2022 | 10 days |
+| Pangu-Weather | AI, run by NOAA/CIRA | Oct 2020 | 10 days |
+| FourCastNet v2 | AI, run by NOAA/CIRA | Oct 2020 | 10 days |
+| Aurora | AI, run by NOAA/CIRA | Jan 2025 | 10 days |
+| ERA5 | reanalysis (truth) | 1940; about a week behind | |
+| GFS analysis | provisional truth for the latest week | Jan 2021 | |
 
-```bash
-wxcc validate --start 2026-01-01 --end 2026-01-31
-```
+Anything in those ranges can be backfilled on demand. Already stored: see `wxcc inventory` or the dashboard's Data tab.
 
-Compares stored ERA5 degree days with NOAA CPC's station-based values.
+## The dashboard
 
-```bash
-wxcc weights
-```
+- **Model vs model:** daily degree days by model for one run; totals for days 1-5, 6-10 and 11-15 against normal and against the previous run; how a fixed window's forecast has changed run to run.
+- **Forecast vs reality:** error and bias by lead time against ERA5, with the caveat that most AI models were trained on ERA5.
+- **Extreme events:** a dropdown of seven events from Uri (Feb 2021) to Fern (Jan 2026), plus any custom dates, showing how each model's forecast for the event evolved as it approached.
+- **Maps:** daily-mean temperature from the latest 00Z run of each model, as differences from the model mean or as temperature.
+- **Market link:** weekly storage change against weekly HDD, Henry Hub against forecast revisions, and day-ahead power prices against regional degree days.
+- **Data:** what is stored, sources, licences, and Colab lab runs.
 
-Rebuilds the population weights from Census data (already committed; rarely needed).
+Each view opens with a short "What am I looking at?" note.
 
-## What am I looking at?
+## Reading the numbers
 
-- **HDD / CDD:** heating and cooling degree days against a 65 F base. One day at 45 F is 20 HDD. They are a standard proxy for heating (gas) and cooling (power) demand.
-- **Population-weighted:** each 25 km grid cell counts in proportion to the people living there, so a cold snap over Chicago moves the number more than one over rural Montana.
-- **Regions:** `NE MA ENC WNC SA ESC WSC MTN PAC` are the nine census divisions; `CONUS` is all of them.
-- **Day:** 06 UTC to 06 UTC, roughly midnight to midnight Central.
-- **method:** `mean6h` (default) averages the four 6-hourly values every model provides; `minmax1h` is (Tmax+Tmin)/2 from hourly data.
-- **quality:** `final` ERA5, or `prelim` for the most recent months, which ECMWF may still revise.
+- **HDD / CDD:** heating and cooling degree days against a 65 F base. A day averaging 45 F is 20 HDD.
+- **Population-weighted:** each 25 km grid cell counts in proportion to the people living there (2020 Census).
+- **Regions:** `NE MA ENC WNC SA ESC WSC MTN PAC` are the nine census divisions; `TX CA PNW NY` are states or state groups that match power markets; `CONUS` is everything.
+- **Day:** 06 UTC to 06 UTC, about midnight to midnight Central.
+- **Lead day:** valid date minus run date. A 12Z run's first complete day is lead day 1.
+- **Level vs other sources:** these degree days run about 5-10% below NOAA CPC's in winter because of how each averages over space. They are consistent with themselves; do not mix them with CPC or EIA figures without re-basing. Details in DECISIONS.md.
 
-## Data and attribution
+## Colab lab (Earth2Studio)
 
-- ERA5: contains modified Copernicus Climate Change Service information, accessed via Google's ARCO-ERA5.
-- Population: US Census Bureau, 2020 Centers of Population.
-- Validation: NOAA Climate Prediction Center degree-day statistics (fetched on demand, not stored).
+Two notebooks in `notebooks/` run models on a Colab GPU and write results into the same store, so the dashboard shows them as "Lab: model" after the next build:
 
-Nothing here needs a paid service or an API key.
+- `lab_forecast.ipynb`: FourCastNet 3, Atlas, AIFS, GraphCast, Pangu or SFNO for a chosen start time and lead, from GFS, IFS or ERA5 initial conditions.
+- `lab_corrdiff.ipynb`: CorrDiff downscaling of ERA5 to 3 km over CONUS, with degree days computed on the 3 km grid.
+
+Each needs a GitHub token saved as the Colab secret `GITHUB_TOKEN` (fine-grained, Contents read and write on this repo only). Estimated cost is about 1-1.5 compute units for the first forecast of a session and 0.1-0.3 for each one after; every run records its measured time and estimated units in its manifest. These notebooks have been tested on CPU with a test model only; no GPU model has been run from them yet.
+
+## Storage
+
+| Where | What | Size |
+|---|---|---|
+| `data/regional/` | Regional series: one Parquet file per init day, monthly truth files | see below |
+| `data/manifests/` | One JSON line per run: source, steps, settings | |
+| `data/market/` | Henry Hub, storage, power prices (CSV) | |
+| `data/static/` | Population weights, state outlines | |
+| `.cache/` (not in git) | Daily temperature maps; capped at 3 GB and pruned automatically | |
+| GitHub Releases `fields-<year>` | Long-term copies of the maps, one zip per model and month | |
+
+Downloads are streamed and cropped to CONUS in memory; no global file is ever written to disk.
+
+## Automation
+
+`.github/workflows/update.yml` runs at 10:17 and 22:17 UTC: update, build, publish maps, commit data. It uses about 300 of the 2,000 free Actions minutes a month on a private repository. The built dashboard is attached to each run as a downloadable artifact. When the repository is made public, the same workflow deploys the dashboard to GitHub Pages (enable it under Settings > Pages > Source: GitHub Actions).
+
+## Data sources and attribution
+
+- **ERA5:** contains modified Copernicus Climate Change Service information; accessed through Google's ARCO-ERA5.
+- **GFS, AIGFS:** NOAA, via NOAA Open Data Dissemination on AWS.
+- **IFS, AIFS:** © ECMWF, open data under CC BY 4.0.
+- **GraphCast, Pangu-Weather, FourCastNet v2, Aurora:** forecasts produced and published by NOAA/CIRA (Radford et al. 2025, BAMS, doi:10.1175/BAMS-D-24-0057.1).
+- **Population:** US Census Bureau, 2020 Centers of Population. **State outlines:** us-atlas (ISC), from Census boundary files.
+- **Validation:** NOAA Climate Prediction Center degree days; Iowa Environmental Mesonet station summaries (fetched on demand, not stored).
+- **Market:** EIA (Henry Hub via FRED, weekly storage); NYISO, MISO and CAISO public market data.
+
+This is a personal research tool, not a forecast service.

@@ -11,3 +11,4 @@ dist/
 *.key
 # Built dashboard (regenerate with: wxcc build)
 site/
+*.tmp

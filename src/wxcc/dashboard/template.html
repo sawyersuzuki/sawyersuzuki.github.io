@@ -211,7 +211,7 @@ footer { color: var(--muted); font-size: 12px; max-width: 95ch; }
     </div>
     <div class="card">
       <h2 id="e-title1"></h2>
-      <p class="sub">Read right to left as time passing: 10 days out on the left, the day the event starts on the right.</p>
+      <p class="sub">Read left to right as time passing: 10 days out on the left, the day the event starts on the right.</p>
       <div class="chart" id="e-chart1"></div>
       <div class="scroll"><table id="e-table"></table></div>
     </div>
@@ -264,6 +264,11 @@ footer { color: var(--muted); font-size: 12px; max-width: 95ch; }
     <div class="card">
       <h2>Models and history</h2>
       <div class="scroll"><table id="d-table"></table></div>
+    </div>
+    <div class="card" id="d-labcard" hidden>
+      <h2>Colab lab runs</h2>
+      <p class="sub">Runs made with the Earth2Studio notebooks. Forecast runs also appear in the other views as "Lab: model".</p>
+      <div class="scroll"><table id="d-lab"></table></div>
     </div>
     <div class="card">
       <h2>Extending history</h2>
@@ -372,7 +377,7 @@ function layout(extra = {}) {
     paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: { family: css("--font") || "system-ui", color: ink2, size: 12 },
     margin: { l: 46, r: 12, t: 6, b: 34 }, hovermode: "x unified", showlegend: true,
     hoverlabel: { bgcolor: css("--surface"), bordercolor: axis, font: { color: css("--ink"), size: 12 } },
-    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", font: { color: ink2, size: 11.5 }, bgcolor: "rgba(0,0,0,0)" },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", traceorder: "normal", font: { color: ink2, size: 11.5 }, bgcolor: "rgba(0,0,0,0)" },
     xaxis: { ...ax, showgrid: false, ...(extra.xaxis || {}) }, yaxis: { ...ax, ...(extra.yaxis || {}) },
   };
   const rest = { ...extra }; delete rest.xaxis; delete rest.yaxis;
@@ -672,6 +677,10 @@ function viewData() {
   const rows = D.inventory.map((m) => [m.label, m.family, m.provider, m.available_from, m.lead_days ? m.lead_days + " d" : "", m.stored_runs ? String(m.stored_runs) : (m.stored_days ? m.stored_days + " days" : "0"),
     m.stored_first ? m.stored_first.replace("T", " ") + " → " + m.stored_last.replace("T", " ") : "–", { text: m.licence, cls: "txt" }, { text: m.note, cls: "txt" }]);
   table("d-table", ["Model", "Type", "Run by", "Available from", "Lead", "Stored runs", "Stored range", "Licence", "Notes"], rows);
+  const lab = D.lab || []; $("d-labcard").hidden = !lab.length;
+  if (lab.length) table("d-lab", ["Model", "Start time", "Initial data", "GPU", "Inference", "Session", "Est. compute units", "Recorded"],
+    lab.map((x) => [x.model.replace("lab_", ""), x.init_time.replace("T", " "), x.source || "–", x.gpu || "–", x.run_s != null ? x.run_s + " s" : "–",
+      x.session_s != null ? (x.session_s / 60).toFixed(1) + " min" : "–", x.units != null ? String(x.units) : "–", x.written_at.replace("T", " ")]));
 }
 
 // ---------------------------------------------------------------- controls and routing

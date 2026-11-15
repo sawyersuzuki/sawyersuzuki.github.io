@@ -15,6 +15,7 @@ job is safe.
 from __future__ import annotations
 
 import json
+import os
 import threading
 from pathlib import Path
 
@@ -93,7 +94,9 @@ def _upsert(path: Path, new: pd.DataFrame) -> int:
     if old is not None and len(old) == len(merged) and old[COLUMNS].equals(merged[COLUMNS]):
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
-    merged[COLUMNS].to_parquet(path, index=False, compression="zstd")
+    tmp = path.with_name(path.name + ".tmp")
+    merged[COLUMNS].to_parquet(tmp, index=False, compression="zstd")
+    os.replace(tmp, path)  # atomic: a reader never sees a half-written file
     return len(merged) - (0 if old is None else len(old))
 
 
@@ -181,7 +184,9 @@ def flush_manifests(root: Path | None = None) -> int:
                     existing[rec["init_time"]] = rec
         existing.update({r["init_time"]: r for r in records})
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("".join(json.dumps(existing[k], sort_keys=True) + "\n" for k in sorted(existing)))
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text("".join(json.dumps(existing[k], sort_keys=True) + "\n" for k in sorted(existing)))
+        os.replace(tmp, path)
     return len(pending)
 
 

@@ -22,14 +22,14 @@ class Event:
 
 
 EVENTS: list[Event] = [
-    Event("fern-2026", "Winter Storm Fern (Jan 2026)", "cold", "2026-01-23", "2026-01-27", "CONUS",
+    Event("fern-2026", "Winter Storm Fern (Jan 2026)", "cold", "2026-01-24", "2026-01-28", "CONUS",
           "Arctic outbreak with widespread production freeze-offs; EIA reported a record 360 Bcf "
           "storage withdrawal for the week ending 30 January 2026."),
     Event("heat-2025", "Eastern US heat dome (Jun 2025)", "heat", "2025-06-22", "2025-06-25", "MA",
           "Early-season heat dome over the Midwest and Northeast; PJM and NYISO issued hot-weather alerts."),
     Event("cold-2025", "Arctic outbreak (Jan 2025)", "cold", "2025-01-19", "2025-01-23", "CONUS",
           "Cold air mass reaching the Gulf Coast, with rare snow from Houston to the Florida Panhandle."),
-    Event("cold-2024", "Arctic outbreak (Jan 2024)", "cold", "2024-01-13", "2024-01-17", "CONUS",
+    Event("cold-2024", "Arctic outbreak (Jan 2024)", "cold", "2024-01-14", "2024-01-18", "CONUS",
           "Winter storms Gerri and Heather; record US gas demand and large freeze-offs in mid-January."),
     Event("elliott-2022", "Winter Storm Elliott (Dec 2022)", "cold", "2022-12-22", "2022-12-26", "CONUS",
           "Rapid Arctic front before Christmas; generator outages and load shedding in the Southeast "
