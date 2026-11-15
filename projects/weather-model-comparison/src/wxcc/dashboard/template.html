@@ -1,0 +1,744 @@
+<title>Wx Command Center</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Layout: one working surface. Header with data freshness, a tab row, one filter row that
+   scopes everything below it, then cards holding a chart, its key and its table. */
+:root {
+  --plane: #f9f9f7; --surface: #fcfcfb; --ink: #0b0b0b; --ink-2: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10); --wash: rgba(11,11,11,0.05);
+  --accent: #2a78d6; --good: #006300; --critical: #d03b3b;
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --s5: #e87ba4; --s6: #008300; --s7: #6250d6; --s8: #e34948;
+  --div-cool: #2a78d6; --div-warm: #e34948; --div-mid: #f0efec;
+  --seq-lo: #b7d3f6; --seq-hi: #0d366b;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --plane: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.06);
+    --accent: #3987e5; --good: #0ca30c; --critical: #e66767;
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+    --div-cool: #3987e5; --div-warm: #e66767; --div-mid: #383835;
+    --seq-lo: #184f95; --seq-hi: #b7d3f6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --plane: #0d0d0d; --surface: #1a1a19; --ink: #f0efec; --ink-2: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10); --wash: rgba(255,255,255,0.06);
+  --accent: #3987e5; --good: #0ca30c; --critical: #e66767;
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --s5: #d55181; --s6: #0ca30c; --s7: #9085e9; --s8: #e66767;
+  --div-cool: #3987e5; --div-warm: #e66767; --div-mid: #383835;
+  --seq-lo: #184f95; --seq-hi: #b7d3f6;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; background: var(--plane); color: var(--ink); font: 14px/1.45 var(--font); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-block: 20px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: flex; flex-direction: column; gap: 16px; }
+header.top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 20px; }
+header.top h1 { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; margin: 0; }
+.fresh { display: flex; flex-wrap: wrap; gap: 6px 14px; color: var(--ink-2); font-size: 12.5px; }
+.fresh b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+nav.tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--grid); }
+nav.tabs a { padding: 8px 12px; color: var(--ink-2); text-decoration: none; border-bottom: 2px solid transparent; margin-bottom: -1px; font-weight: 550; }
+nav.tabs a:hover { color: var(--ink); }
+nav.tabs a[aria-current="page"] { color: var(--ink); border-bottom-color: var(--accent); }
+.filters { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field > span { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+select, input[type="date"], button.btn { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--axis);
+  border-radius: 6px; padding: 5px 8px; max-width: 100%; }
+select:focus-visible, input:focus-visible, button:focus-visible, a:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 999px; border: 1px solid var(--axis);
+  background: var(--surface); color: var(--ink); font: inherit; font-size: 12.5px; cursor: pointer; }
+.chip .key { width: 14px; height: 3px; border-radius: 2px; background: var(--c, var(--muted)); }
+.chip[aria-pressed="false"] { color: var(--muted); background: transparent; border-style: dashed; }
+.chip[aria-pressed="false"] .key { opacity: 0.35; }
+section.view { display: flex; flex-direction: column; gap: 16px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 14px 16px; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.card h2 { font-size: 15px; font-weight: 620; margin: 0; text-wrap: balance; }
+.card .sub { color: var(--ink-2); font-size: 12.5px; margin: 0; max-width: 85ch; }
+.card .tools { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: end; }
+.chart { width: 100%; height: 340px; min-width: 0; }
+.chart.short { height: 280px; }
+.chart:has(> .empty) { height: auto; }
+details.explain { background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; }
+details.explain summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+details.explain p, details.explain li { color: var(--ink-2); max-width: 85ch; margin: 8px 0 0; }
+details.explain ul { margin: 6px 0 0; padding-left: 18px; }
+.two { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.tile { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; background: var(--surface); }
+.tile .label { font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.tile .value { font-size: 24px; font-weight: 620; letter-spacing: -0.01em; }
+.tile .note { color: var(--ink-2); font-size: 12px; }
+.scroll { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; }
+th, td { padding: 5px 10px; text-align: right; border-bottom: 1px solid var(--grid); white-space: nowrap; font-variant-numeric: tabular-nums; }
+th { color: var(--muted); font-weight: 550; font-size: 11.5px; letter-spacing: 0.03em; }
+th:first-child, td:first-child { text-align: left; }
+td.txt, th.txt { text-align: left; white-space: normal; }
+td .key { display: inline-block; width: 14px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 7px; background: var(--c, var(--muted)); }
+.up { color: var(--critical); } .down { color: var(--accent); }
+.empty { color: var(--ink-2); padding: 24px 4px; }
+.maps { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 250px), 1fr)); gap: 12px; }
+.map { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.map .name { font-size: 12.5px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; }
+.map .name span { color: var(--ink-2); font-weight: 400; font-variant-numeric: tabular-nums; }
+.map canvas { width: 100%; aspect-ratio: 1.8; border-radius: 4px; background: var(--wash); display: block; }
+.scalebar { display: flex; align-items: center; gap: 8px; color: var(--ink-2); font-size: 12px; font-variant-numeric: tabular-nums; }
+.scalebar canvas { width: min(320px, 60%); height: 10px; border-radius: 3px; }
+code, kbd { font-family: var(--mono); font-size: 12.5px; background: var(--wash); padding: 1px 5px; border-radius: 4px; }
+pre { font-family: var(--mono); font-size: 12.5px; background: var(--wash); padding: 10px 12px; border-radius: 6px; overflow-x: auto; margin: 0; }
+footer { color: var(--muted); font-size: 12px; max-width: 95ch; }
+#tip { position: fixed; pointer-events: none; z-index: 20; background: var(--surface); color: var(--ink); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 8px; font-size: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.15); font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .chart { height: 300px; } header.top h1 { font-size: 18px; } }
+</style>
+<!--BODY-->
+<div class="wrap">
+  <header class="top">
+    <h1>Wx Command Center</h1>
+    <div class="fresh" id="fresh"></div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Views">
+    <a href="#models">Model vs model</a>
+    <a href="#verification">Forecast vs reality</a>
+    <a href="#events">Extreme events</a>
+    <a href="#maps">Maps</a>
+    <a href="#market" id="tab-market" hidden>Market link</a>
+    <a href="#data">Data</a>
+  </nav>
+
+  <div class="filters" id="filters">
+    <label class="field"><span>Region</span><select id="f-region"></select></label>
+    <label class="field"><span>Measure</span><select id="f-var">
+      <option value="hdd">Heating degree days (HDD)</option><option value="cdd">Cooling degree days (CDD)</option><option value="tdd">Total degree days (HDD + CDD)</option></select></label>
+    <div class="field"><span>Models</span><div class="chips" id="f-models"></div></div>
+  </div>
+
+  <!-- ============================== MODEL VS MODEL -->
+  <section class="view" id="v-models" hidden>
+    <details class="explain" open><summary>What am I looking at?</summary>
+      <p>Each line is one model's forecast of daily population-weighted degree days for the region, all from runs that started at the same time. Where the lines sit close together the models agree; where they fan out, the atmosphere is in a state the models resolve differently, and that is where forecast risk lives.</p>
+      <ul>
+        <li><b>Run time</b> ("00Z", "12Z") is when the model started, in UTC. A day here runs from 06Z to 06Z, roughly midnight to midnight Central.</li>
+        <li><b>Normal</b> is the 10-year average for that calendar date from ERA5. <b>Observed</b> is ERA5, or GFS analysis for the most recent week, which ERA5 has not reached yet.</li>
+        <li><b>Model range</b> is the spread between different models. It is not an ensemble spread from one model, so it understates uncertainty when all models share the same blind spot.</li>
+        <li><b>Run-to-run change</b> is what moves markets: the same days, re-forecast 12 hours later. Consistent revisions in one direction usually mean the pattern is still trending.</li>
+      </ul>
+    </details>
+    <div class="card">
+      <div class="tools"><label class="field"><span>Run</span><select id="m-run"></select></label></div>
+      <h2 id="m-title1"></h2>
+      <div class="chart" id="m-chart1"></div>
+      <div class="scroll"><table id="m-table"></table></div>
+      <p class="sub">Totals are sums of daily degree days over forecast days 1-5, 6-10 and 11-15 after the run date. "vs normal" compares with the 10-year average for the same dates; "vs prev run" compares with the run 12 hours earlier over the same dates.</p>
+    </div>
+    <div class="two">
+      <div class="card">
+        <div class="tools"><label class="field"><span>Window</span><select id="m-window">
+          <option value="1-5">Days 1-5</option><option value="6-10">Days 6-10</option><option value="11-15">Days 11-15</option></select></label></div>
+        <h2 id="m-title2"></h2>
+        <p class="sub">One fixed set of dates, forecast by each successive run. A line that keeps climbing means the models have been adding demand to the same days.</p>
+        <div class="chart short" id="m-chart2"></div>
+      </div>
+      <div class="card">
+        <div class="tools"><label class="field"><span>Model</span><select id="m-model"></select></label></div>
+        <h2 id="m-title3"></h2>
+        <p class="sub">The last eight runs of one model, darkest is newest. Lines stacked on top of each other mean a stable forecast.</p>
+        <div class="chart short" id="m-chart3"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================== FORECAST VS REALITY -->
+  <section class="view" id="v-verification" hidden>
+    <details class="explain" open><summary>What am I looking at?</summary>
+      <p>How wrong each model's regional degree-day forecast was, as a function of how far ahead it was made, scored against ERA5.</p>
+      <ul>
+        <li><b>Mean absolute error</b> is the typical size of the miss, in degree days per day. It grows with lead time; the lead at which it reaches the size of normal day-to-day variability is where the forecast stops adding much.</li>
+        <li><b>Bias</b> is the average signed miss. A model with a positive HDD bias runs systematically cold in this region. Bias can be corrected; scatter cannot.</li>
+        <li><b>Caveat on fairness.</b> ERA5 is produced with ECMWF's own model, and AIFS, GraphCast, Pangu, FourCastNet and Aurora were trained on ERA5. Scoring against ERA5 therefore flatters those models relative to scoring against weather stations. GFS-initialised runs also start from a slightly different analysis, which shows up as error at day 1.</li>
+        <li>Only days where ERA5 exists are scored, so the most recent week is excluded.</li>
+      </ul>
+    </details>
+    <div class="card">
+      <div class="tools">
+        <label class="field"><span>Period (valid dates)</span><select id="v-period">
+          <option value="30">Last 30 days</option><option value="60">Last 60 days</option><option value="90" selected>Last 90 days</option><option value="all">All stored runs</option></select></label>
+        <label class="field"><span>Runs</span><select id="v-cycle"><option value="all">00Z and 12Z</option><option value="0">00Z only</option><option value="12">12Z only</option></select></label>
+      </div>
+      <div class="two">
+        <div><h2 id="v-title1"></h2><div class="chart short" id="v-chart1"></div></div>
+        <div><h2 id="v-title2"></h2><div class="chart short" id="v-chart2"></div></div>
+      </div>
+      <div class="scroll"><table id="v-table"></table></div>
+    </div>
+    <div class="card">
+      <div class="tools"><label class="field"><span>Lead</span><select id="v-lead"></select></label></div>
+      <h2 id="v-title3"></h2>
+      <p class="sub">Forecast minus observed for each valid date at one lead time. Spikes shared by every model are days the atmosphere was hard to predict; a spike in one model is that model's bust.</p>
+      <div class="chart short" id="v-chart3"></div>
+    </div>
+  </section>
+
+  <!-- ============================== EVENTS -->
+  <section class="view" id="v-events" hidden>
+    <details class="explain" open><summary>What am I looking at?</summary>
+      <p>How each model's forecast for a fixed extreme-weather window evolved as the event approached. This is the view that shows when the models "saw" an event and which saw it first.</p>
+      <ul>
+        <li>The first chart holds the event dates fixed and moves the run date. Each point is one run's forecast of total degree days over the window. A model that reaches the observed line early, and stays there, gave useful warning.</li>
+        <li>The second chart shows daily values from runs made a chosen number of days before the event started.</li>
+        <li>Models only appear for events inside their archive: IFS open data starts in 2023 and AIFS in 2024, so 2021-22 events show GFS and the AI models NOAA re-ran.</li>
+        <li><b>Caveat.</b> GraphCast, FourCastNet and Aurora were trained on years that include some of these events, so their hindcasts of them are not a clean test. Pangu-Weather (trained on 1979-2017) is out of sample for all of them.</li>
+      </ul>
+    </details>
+    <div class="card">
+      <div class="tools">
+        <label class="field"><span>Event</span><select id="e-event"></select></label>
+        <label class="field"><span>From</span><input type="date" id="e-start"></label>
+        <label class="field"><span>To</span><input type="date" id="e-end"></label>
+      </div>
+      <p class="sub" id="e-note"></p>
+      <div class="tiles" id="e-tiles"></div>
+    </div>
+    <div class="card">
+      <h2 id="e-title1"></h2>
+      <p class="sub">Read left to right as time passing: 10 days out on the left, the day the event starts on the right.</p>
+      <div class="chart" id="e-chart1"></div>
+      <div class="scroll"><table id="e-table"></table></div>
+    </div>
+    <div class="card">
+      <div class="tools"><label class="field"><span>Runs made</span><select id="e-lead"></select></label></div>
+      <h2 id="e-title2"></h2>
+      <div class="chart" id="e-chart2"></div>
+    </div>
+  </section>
+
+  <!-- ============================== MAPS -->
+  <section class="view" id="v-maps" hidden>
+    <details class="explain" open><summary>What am I looking at?</summary>
+      <p>Daily-mean 2 m temperature from the latest 00Z run of each model, on the same 0.5 degree grid. The regional numbers in the other views are population-weighted sums of exactly these maps.</p>
+      <ul>
+        <li><b>Difference from model mean</b> shows where one model is warmer (red) or colder (blue) than the average of the models shown. Large coherent patches are usually a disagreement about where a front or ridge sits, which matters more than scattered noise.</li>
+        <li><b>Temperature</b> is centred on 65 F, the degree-day base: blue areas are accumulating heating degree days, red areas cooling degree days.</li>
+        <li>Hover a map for the value at a point. The Region and Measure filters above do not apply to maps.</li>
+      </ul>
+    </details>
+    <div class="card">
+      <div class="tools">
+        <label class="field"><span>Valid day</span><select id="p-day"></select></label>
+        <label class="field"><span>Show</span><select id="p-mode"><option value="diff">Difference from model mean</option><option value="abs">Temperature</option></select></label>
+      </div>
+      <h2 id="p-title"></h2>
+      <div class="scalebar"><span id="p-lo"></span><canvas id="p-scale" width="320" height="10"></canvas><span id="p-hi"></span><span id="p-unit"></span></div>
+      <div class="maps" id="p-maps"></div>
+    </div>
+  </section>
+
+  <!-- ============================== MARKET -->
+  <section class="view" id="v-market" hidden>
+    <details class="explain" open><summary>What am I looking at?</summary>
+      <p>Weather next to the prices it moves. All market data here comes from free public sources and arrives with a delay of a day to a week, so this view is for understanding relationships, not for trading signals.</p>
+      <ul>
+        <li><b>Storage vs weather</b>: each dot is one week. Weekly population-weighted HDD explains most of the weekly change in working gas in storage; the slope is roughly how many Bcf one extra HDD costs.</li>
+        <li><b>Henry Hub vs forecast revisions</b>: the lower panel is the day-over-day change in the CONUS degree-day total for forecast days 1-15. Prices respond to changes in the forecast, not to the level of the forecast.</li>
+        <li><b>Power prices</b>: day-ahead prices by zone against that region's degree days, where a free source exists.</li>
+      </ul>
+    </details>
+    <div id="k-body"></div>
+  </section>
+
+  <!-- ============================== DATA -->
+  <section class="view" id="v-data" hidden>
+    <details class="explain" open><summary>What am I looking at?</summary>
+      <p>What is stored, where each model comes from, and how far back its free archive goes. "Available from" is the earliest run you could backfill; "Stored" is what this dashboard currently holds.</p>
+    </details>
+    <div class="card">
+      <h2>Models and history</h2>
+      <div class="scroll"><table id="d-table"></table></div>
+    </div>
+    <div class="card" id="d-labcard" hidden>
+      <h2>Colab lab runs</h2>
+      <p class="sub">Runs made with the Earth2Studio notebooks. Forecast runs also appear in the other views as "Lab: model".</p>
+      <div class="scroll"><table id="d-lab"></table></div>
+    </div>
+    <div class="card">
+      <h2>Extending history</h2>
+      <p class="sub">Run these in the repository. Backfill prints the download size, disk use and runtime and asks before it starts; it skips whatever is already stored.</p>
+      <pre>wxcc update                                                  # latest runs + truth (the daily job)
+wxcc backfill --model aifs --start 2025-01-01 --end 2025-03-31
+wxcc backfill --model all --start 2024-01-05 --end 2024-01-20
+wxcc query --model gfs --region TX --init 2026-11-15T00
+wxcc build &amp;&amp; wxcc serve                                     # rebuild and open this page</pre>
+    </div>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+<div id="tip" hidden></div>
+
+<script src="https://cdn.jsdelivr.net/npm/plotly.js-cartesian-dist-min@2.35.2/plotly-cartesian.min.js"></script>
+<script>
+"use strict";
+const D = /*__DATA__*/null;
+(function () {
+if (!D) { document.querySelector(".wrap").append("No data embedded. Run `wxcc build`."); return; }
+
+// ---------------------------------------------------------------- helpers
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, kids = []) => {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(props)) {
+    if (k === "class") n.className = v; else if (k === "text") n.textContent = v;
+    else if (k === "style") n.setAttribute("style", v); else n.setAttribute(k, v);
+  }
+  for (const c of [].concat(kids)) n.append(c);
+  return n;
+};
+const DAY = 86400000, MISS = D.missing, SC = D.scale, NL = D.nlead, NR = D.regions.length;
+const i16 = (b64) => { const s = atob(b64), u = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i); return new Int16Array(u.buffer); };
+const dnum = (iso) => Math.round(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / DAY);
+const diso = (d) => new Date(d * DAY).toISOString().slice(0, 10);
+const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const WD = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const dlabel = (d, wd) => { const t = new Date(d * DAY); return (wd ? WD[t.getUTCDay()] + " " : "") + t.getUTCDate() + " " + MON[t.getUTCMonth()]; };
+const dlong = (d) => { const t = new Date(d * DAY); return t.getUTCDate() + " " + MON[t.getUTCMonth()] + " " + t.getUTCFullYear(); };
+const doy = (d) => { const t = new Date(d * DAY); return Math.min(366, Math.round((d * DAY - Date.UTC(t.getUTCFullYear(), 0, 1)) / DAY) + 1); };
+const fmt = (v, p = 1) => (v == null || !isFinite(v)) ? "–" : v.toFixed(p);
+const signed = (v, p = 1) => (v == null || !isFinite(v)) ? "–" : (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(p);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const store = { get(k, d) { try { const v = localStorage.getItem("wxcc." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+                set(k, v) { try { localStorage.setItem("wxcc." + k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } } };
+
+// ---------------------------------------------------------------- data access
+const T = { start: dnum(D.truth.start), n: D.truth.n, hdd: i16(D.truth.hdd), cdd: i16(D.truth.cdd), q: D.truth.quality };
+const NRM = { hdd: i16(D.normals.hdd), cdd: i16(D.normals.cdd) };
+const both = (f, v, ...a) => { if (v !== "tdd") return f(v, ...a); const h = f("hdd", ...a), c = f("cdd", ...a); return h == null || c == null ? null : h + c; };
+const truth1 = (v, r, d) => { const i = d - T.start; if (i < 0 || i >= T.n) return null; const x = T[v][i * NR + r]; return x === MISS ? null : x / SC; };
+const truth = (v, r, d) => both(truth1, v, r, d);
+const tq = (d) => { const i = d - T.start; return (i < 0 || i >= T.n) ? "-" : T.q[i]; };
+const isEra = (d) => { const q = tq(d); return q === "f" || q === "p"; };
+const normal1 = (v, r, d) => { const x = NRM[v][(doy(d) - 1) * NR + r]; return x === MISS ? null : x / SC; };
+const normal = (v, r, d) => both(normal1, v, r, d);
+let lastTruth = T.start; for (let i = T.n - 1; i >= 0; i--) if (T.q[i] !== "-") { lastTruth = T.start + i; break; }
+let lastEra = T.start; for (let i = T.n - 1; i >= 0; i--) if (T.q[i] === "f" || T.q[i] === "p") { lastEra = T.start + i; break; }
+
+const SLOT = { gfs: 1, ifs: 2, aifs: 3, aigfs: 4, graphcast: 5, pangu: 6, fcnv2: 7, aurora: 8 };
+const DASHES = ["dash", "dot", "dashdot", "longdash"];
+const MODELS = D.models.map((m, k) => {
+  const R = D.runs[m.id];
+  const inits = R.inits.map((s) => ({ day: dnum(s), hour: +s.slice(11, 13), key: s }));
+  const index = new Map(R.inits.map((s, i) => [s, i]));
+  return { ...m, slot: SLOT[m.id] || 0, extra: SLOT[m.id] ? -1 : k, inits, index, hdd: i16(R.hdd), cdd: i16(R.cdd) };
+});
+const MBY = Object.fromEntries(MODELS.map((m) => [m.id, m]));
+const fc1 = (v, m, i, lead, r) => { if (lead < 0 || lead >= NL) return null; const x = m[v][(i * NL + lead) * NR + r]; return x === MISS ? null : x / SC; };
+const fc = (m, v, i, lead, r) => both(fc1, v, m, i, lead, r);
+const color = (m) => m.slot ? css("--s" + m.slot) : css("--muted");
+const dash = (m) => m.slot ? "solid" : DASHES[m.extra % DASHES.length];
+const runLabel = (key) => { const d = dnum(key); return dlabel(d, true) + " " + key.slice(11, 13) + "Z"; };
+
+// ---------------------------------------------------------------- state
+const S = {
+  region: store.get("region", "CONUS"), v: store.get("var", null), view: "models",
+  on: store.get("models", null), run: null, window: "1-5", model: null,
+  period: "90", cycle: "all", lead: 5, event: D.events.length ? D.events[0].id : "custom", es: null, ee: null, elead: 5,
+  pday: 1, pmode: "diff",
+};
+if (!D.regions.some((r) => r.id === S.region)) S.region = "CONUS";
+const DEFAULT_ON = ["gfs", "ifs", "aifs", "aigfs", "graphcast", "pangu"];
+if (!S.on) S.on = MODELS.filter((m) => DEFAULT_ON.includes(m.id) || !m.slot).map((m) => m.id);
+S.on = S.on.filter((id) => MBY[id]); if (!S.on.length) S.on = MODELS.map((m) => m.id);
+const allRuns = [...new Set(MODELS.flatMap((m) => m.inits.map((x) => x.key)))].sort();
+const recentRuns = allRuns.slice(-40).reverse();
+// default run: the newest one that at least half of the models have
+const half = Math.ceil(MODELS.length / 2);
+S.run = recentRuns.find((k) => MODELS.filter((m) => m.index.has(k)).length >= half) || recentRuns[0];
+if (!S.v) { const mo = new Date(dnum(S.run) * DAY).getUTCMonth(); S.v = (mo >= 5 && mo <= 7) ? "cdd" : (mo >= 10 || mo <= 2) ? "hdd" : "tdd"; }
+const ri = () => D.regions.findIndex((r) => r.id === S.region);
+const rname = () => D.regions[ri()].name;
+const vname = () => ({ hdd: "HDD", cdd: "CDD", tdd: "HDD + CDD" })[S.v];
+const active = () => MODELS.filter((m) => S.on.includes(m.id));
+
+// ---------------------------------------------------------------- plotting
+const CFG = { displayModeBar: false, responsive: true };
+function layout(extra = {}) {
+  const ink2 = css("--ink-2"), gridc = css("--grid"), axis = css("--axis");
+  const ax = { gridcolor: gridc, linecolor: axis, zeroline: false, tickfont: { color: css("--muted"), size: 11 }, title: { font: { color: ink2, size: 12 } }, automargin: true };
+  const base = {
+    paper_bgcolor: "rgba(0,0,0,0)", plot_bgcolor: "rgba(0,0,0,0)", font: { family: css("--font") || "system-ui", color: ink2, size: 12 },
+    margin: { l: 46, r: 12, t: 6, b: 34 }, hovermode: "x unified", showlegend: true,
+    hoverlabel: { bgcolor: css("--surface"), bordercolor: axis, font: { color: css("--ink"), size: 12 } },
+    legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", traceorder: "normal", font: { color: ink2, size: 11.5 }, bgcolor: "rgba(0,0,0,0)" },
+    xaxis: { ...ax, showgrid: false, ...(extra.xaxis || {}) }, yaxis: { ...ax, ...(extra.yaxis || {}) },
+  };
+  const rest = { ...extra }; delete rest.xaxis; delete rest.yaxis;
+  return { ...base, ...rest };
+}
+const line = (m, x, y, more = {}) => ({ type: "scatter", mode: "lines", name: m.label, x, y, connectgaps: false,
+  line: { color: color(m), width: 2, dash: dash(m), shape: "linear" }, hovertemplate: "%{y:.1f}<extra>" + m.label + "</extra>", ...more });
+const inkLine = (name, x, y, more = {}) => ({ type: "scatter", mode: "lines", name, x, y, line: { color: css("--ink"), width: 2.5 }, hovertemplate: "%{y:.1f}<extra>" + name + "</extra>", ...more });
+const normLine = (x, y) => ({ type: "scatter", mode: "lines", name: "Normal", x, y, line: { color: css("--muted"), width: 1.5, dash: "dot" }, hovertemplate: "%{y:.1f}<extra>Normal</extra>" });
+function draw(id, traces, lay, emptyMsg) {
+  const node = $(id);
+  if (!traces.length) { if (window.Plotly) Plotly.purge(node); node.replaceChildren(el("div", { class: "empty", text: emptyMsg || "Nothing stored for this selection." })); return; }
+  if (node.firstChild && node.firstChild.classList && node.firstChild.classList.contains("empty")) node.replaceChildren();
+  if (!window.Plotly) { node.replaceChildren(el("div", { class: "empty", text: "Charts need the Plotly script from cdn.jsdelivr.net, which did not load. The tables below still work." })); return; }
+  Plotly.react(node, traces, lay, CFG);
+}
+function table(id, head, rows) {
+  const t = $(id); t.replaceChildren();
+  const tr = el("tr"); head.forEach((h) => tr.append(el("th", { text: h }))); t.append(el("thead", {}, tr));
+  const tb = el("tbody");
+  rows.forEach((r) => { const row = el("tr"); r.forEach((c) => {
+    if (c && c.model) { const td = el("td"); const k = el("span", { class: "key", style: "--c:" + color(c.model) }); td.append(k, c.model.label); row.append(td); }
+    else if (c && typeof c === "object") row.append(el("td", { text: c.text, class: c.cls || "" }));
+    else row.append(el("td", { text: c == null ? "–" : String(c) }));
+  }); tb.append(row); });
+  t.append(tb);
+}
+const delta = (v, p = 1) => ({ text: signed(v, p), cls: v == null || Math.abs(v) < 0.05 ? "" : (v > 0 ? "up" : "down") });
+
+// sum of a model's forecast over valid days [a, b] from run i; null unless every day is present
+function fcSum(m, v, i, a, b, r) { const d0 = m.inits[i].day; let s = 0; for (let d = a; d <= b; d++) { const x = fc(m, v, i, d - d0, r); if (x == null) return null; s += x; } return s; }
+function truthSum(v, a, b, r, eraOnly) { let s = 0; for (let d = a; d <= b; d++) { const x = truth(v, r, d); if (x == null || (eraOnly && !isEra(d))) return null; s += x; } return s; }
+function normSum(v, a, b, r) { let s = 0; for (let d = a; d <= b; d++) { const x = normal(v, r, d); if (x == null) return null; s += x; } return s; }
+
+// ---------------------------------------------------------------- view: models
+function viewModels() {
+  const r = ri(), v = S.v, d0 = dnum(S.run), ms = active();
+  // chart 1: all models, one run
+  const days = []; for (let d = d0 - 2; d <= d0 + 16; d++) days.push(d);
+  const x = days.map(diso), traces = [], lo = days.map(() => null), hi = days.map(() => null);
+  const have = ms.filter((m) => m.index.has(S.run));
+  have.forEach((m) => { const i = m.index.get(S.run); const y = days.map((d, k) => { const val = fc(m, v, i, d - d0, r);
+      if (val != null) { lo[k] = lo[k] == null ? val : Math.min(lo[k], val); hi[k] = hi[k] == null ? val : Math.max(hi[k], val); } return val; });
+    traces.push(line(m, x, y)); });
+  if (have.length > 1) {
+    traces.unshift({ type: "scatter", mode: "lines", x, y: lo, line: { width: 0 }, hoverinfo: "skip", showlegend: false, connectgaps: false },
+      { type: "scatter", mode: "lines", name: "Model range", x, y: hi, line: { width: 0 }, fill: "tonexty", fillcolor: css("--wash"), hoverinfo: "skip", connectgaps: false });
+  }
+  const obs = days.map((d) => truth(v, r, d));
+  if (traces.length) {
+    traces.push(normLine(x, days.map((d) => normal(v, r, d))));
+    if (obs.some((o) => o != null)) traces.push(inkLine("Observed", x, obs));
+  }
+  $("m-title1").textContent = "Daily " + vname() + " by model, run of " + runLabel(S.run) + " · " + rname();
+  draw("m-chart1", traces, layout({ yaxis: { title: { text: vname() + " per day" }, rangemode: "tozero" }, xaxis: { tickformat: "%-d %b" } }),
+    "None of the selected models has the " + runLabel(S.run) + " run stored.");
+
+  // table: window totals
+  const prevKey = allRuns[allRuns.indexOf(S.run) - 1];
+  const wins = [[1, 5], [6, 10], [11, 15]];
+  const head = ["Model"]; wins.forEach(([a, b]) => head.push("D" + a + "-" + b, "vs normal", "vs prev run"));
+  const rows = have.map((m) => { const i = m.index.get(S.run); const row = [{ model: m }];
+    wins.forEach(([a, b]) => { const s = fcSum(m, v, i, d0 + a, d0 + b, r), n = normSum(v, d0 + a, d0 + b, r);
+      const pi = prevKey != null && m.index.has(prevKey) ? m.index.get(prevKey) : null;
+      const p = pi == null ? null : fcSum(m, v, pi, d0 + a, d0 + b, r);
+      row.push(fmt(s), delta(s == null || n == null ? null : s - n), delta(s == null || p == null ? null : s - p)); });
+    return row; });
+  if (rows.length) { const nrow = ["Normal"]; wins.forEach(([a, b]) => nrow.push(fmt(normSum(v, d0 + a, d0 + b, r)), "", "")); rows.push(nrow); }
+  table("m-table", head, rows);
+
+  // chart 2: fixed window across successive runs
+  const [wa, wb] = S.window.split("-").map(Number), a = d0 + wa, b = d0 + wb;
+  const upto = allRuns.indexOf(S.run), keys = allRuns.slice(Math.max(0, upto - 19), upto + 1);
+  const t2 = [];
+  ms.forEach((m) => { const xs = [], ys = [];
+    keys.forEach((k) => { if (!m.index.has(k)) return; const s = fcSum(m, v, m.index.get(k), a, b, r); if (s == null) return;
+      xs.push(k.slice(0, 10) + " " + k.slice(11, 13) + ":00"); ys.push(s); });
+    if (xs.length) t2.push(line(m, xs, ys, { mode: "lines+markers", marker: { size: 6, color: color(m) } })); });
+  const nw = normSum(v, a, b, r), tw = truthSum(v, a, b, r, false);
+  const shapes = []; const ann = [];
+  const href = (val, name, col, dashStyle) => { shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, y0: val, y1: val, line: { color: col, width: 1.5, dash: dashStyle } });
+    ann.push({ xref: "paper", x: 1, xanchor: "right", y: val, yanchor: "bottom", text: name + " " + fmt(val), showarrow: false, font: { color: css("--ink-2"), size: 11 } }); };
+  if (t2.length && nw != null) href(nw, "Normal", css("--muted"), "dot");
+  if (t2.length && tw != null) href(tw, "Observed", css("--ink"), "solid");
+  $("m-title2").textContent = "Total " + vname() + " for " + dlabel(a) + " to " + dlabel(b) + ", by run · " + rname();
+  draw("m-chart2", t2, layout({ shapes, annotations: ann, yaxis: { title: { text: vname() + " over window" } }, xaxis: { tickformat: "%-d %b %HZ", nticks: 6 } }),
+    "No stored run covers all of " + dlabel(a) + " to " + dlabel(b) + ".");
+
+  // chart 3: successive runs of one model
+  const m = MBY[S.model] || ms[0] || MODELS[0];
+  const t3 = [];
+  if (m) {
+    const mine = m.inits.map((q, i) => ({ ...q, i })).filter((q) => q.key <= S.run).slice(-8);
+    const cLo = css("--seq-lo"), cHi = css("--seq-hi");
+    const first = mine.length ? mine[0].day : d0, xd = []; for (let d = first; d <= d0 + 16; d++) xd.push(d);
+    mine.forEach((q, k) => { const f = mine.length > 1 ? k / (mine.length - 1) : 1;
+      t3.push({ type: "scatter", mode: "lines", name: runLabel(q.key), x: xd.map(diso), y: xd.map((d) => fc(m, v, q.i, d - q.day, r)),
+        line: { color: mix(cLo, cHi, f), width: k === mine.length - 1 ? 2.5 : 1.5 }, hovertemplate: "%{y:.1f}<extra>" + runLabel(q.key) + "</extra>" }); });
+    if (t3.length) { const o = xd.map((d) => truth(v, r, d)); if (o.some((z) => z != null)) t3.push(inkLine("Observed", xd.map(diso), o)); }
+    $("m-title3").textContent = "Successive runs of " + m.label + " · " + rname();
+  }
+  draw("m-chart3", t3, layout({ yaxis: { title: { text: vname() + " per day" }, rangemode: "tozero" }, xaxis: { tickformat: "%-d %b" }, legend: { orientation: "h", x: 0, y: 1.02, yanchor: "bottom", font: { color: css("--ink-2"), size: 10.5 } } }));
+}
+function hexrgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map((c) => c + c).join(""); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); }
+function mix(a, b, f) { const A = hexrgb(a), B = hexrgb(b); return "rgb(" + A.map((x, i) => Math.round(x + (B[i] - x) * f)).join(",") + ")"; }
+
+// ---------------------------------------------------------------- view: verification
+function verifStats(m, v, r, from, to, cycle) {
+  const n = new Array(NL).fill(0), se = new Array(NL).fill(0), ae = new Array(NL).fill(0);
+  m.inits.forEach((q, i) => { if (cycle !== "all" && q.hour !== +cycle) return;
+    for (let L = 0; L < NL; L++) { const d = q.day + L; if (d < from || d > to || !isEra(d)) continue;
+      const f = fc(m, v, i, L, r), o = truth(v, r, d); if (f == null || o == null) continue; n[L]++; se[L] += f - o; ae[L] += Math.abs(f - o); } });
+  return { n, bias: se.map((s, L) => n[L] >= 5 ? s / n[L] : null), mae: ae.map((s, L) => n[L] >= 5 ? s / n[L] : null) };
+}
+function viewVerification() {
+  const r = ri(), v = S.v, ms = active(), to = lastEra;
+  const from = S.period === "all" ? T.start : to - (+S.period) + 1;
+  const leads = []; for (let L = 1; L <= 15; L++) leads.push(L);
+  const t1 = [], t2 = [], rows = [];
+  ms.forEach((m) => { const st = verifStats(m, v, r, from, to, S.cycle); if (!st.n.some((x) => x >= 5)) return;
+    const mk = { mode: "lines+markers", marker: { size: 6, color: color(m) } };
+    t1.push(line(m, leads, leads.map((L) => st.mae[L]), { ...mk, hovertemplate: "%{y:.2f}<extra>" + m.label + "</extra>" }));
+    t2.push(line(m, leads, leads.map((L) => st.bias[L]), { ...mk, hovertemplate: "%{y:+.2f}<extra>" + m.label + "</extra>" }));
+    rows.push([{ model: m }, ...[1, 3, 5, 7, 10, 14].map((L) => fmt(st.mae[L], 2)), ...[3, 7].map((L) => delta(st.bias[L], 2)), String(st.n[3])]); });
+  const span = dlong(Math.max(from, T.start)) + " to " + dlong(to);
+  $("v-title1").textContent = "Mean absolute error by lead · " + rname();
+  $("v-title2").textContent = "Bias by lead · " + rname();
+  const xa = { title: { text: "Lead (days)" }, dtick: 2 };
+  const msg = "No stored forecasts overlap ERA5 in this period.";
+  draw("v-chart1", t1, layout({ xaxis: xa, yaxis: { title: { text: vname() + " per day" }, rangemode: "tozero" } }), msg);
+  draw("v-chart2", t2, layout({ xaxis: xa, yaxis: { title: { text: vname() + " per day" }, zeroline: true, zerolinecolor: css("--axis") } }), msg);
+  table("v-table", ["Model", "MAE d1", "d3", "d5", "d7", "d10", "d14", "Bias d3", "Bias d7", "Runs scored (d3)"], rows);
+  // chart 3: error over time at one lead
+  const L = S.lead, t3 = [];
+  ms.forEach((m) => { const pts = new Map();
+    m.inits.forEach((q, i) => { if (S.cycle !== "all" && q.hour !== +S.cycle) return; if (S.cycle === "all" && q.hour !== 0) return;
+      const d = q.day + L; if (d < from || d > to || !isEra(d)) return; const f = fc(m, v, i, L, r), o = truth(v, r, d); if (f == null || o == null) return; pts.set(d, f - o); });
+    const ds = [...pts.keys()].sort((a, b) => a - b); if (!ds.length) return;
+    const xs = [], ys = []; ds.forEach((d, k) => { if (k && d - ds[k - 1] > 1) { xs.push(diso(ds[k - 1] + 1)); ys.push(null); } xs.push(diso(d)); ys.push(pts.get(d)); });
+    t3.push(line(m, xs, ys, { hovertemplate: "%{y:+.1f}<extra>" + m.label + "</extra>" })); });
+  $("v-title3").textContent = "Day-" + L + " forecast error by valid date · " + rname() + " · " + span;
+  draw("v-chart3", t3, layout({ yaxis: { title: { text: "Forecast − observed (" + vname() + ")" }, zeroline: true, zerolinecolor: css("--axis") }, xaxis: { tickformat: "%-d %b %Y", nticks: 8 } }), msg);
+}
+
+// ---------------------------------------------------------------- view: events
+function eventWindow() {
+  const ev = D.events.find((e) => e.id === S.event);
+  if (ev) return { s: dnum(ev.start), e: dnum(ev.end), ev };
+  if (S.es && S.ee && S.ee >= S.es) return { s: S.es, e: S.ee, ev: null };
+  return null;
+}
+function viewEvents() {
+  const w = eventWindow(), r = ri(), v = S.v, ms = active();
+  const tiles = $("e-tiles"); tiles.replaceChildren();
+  if (!w) { $("e-note").textContent = "Pick a start and end date."; ["e-chart1", "e-chart2"].forEach((id) => draw(id, [], null, "Pick a start and end date.")); table("e-table", [], []); return; }
+  const { s, e, ev } = w, nd = e - s + 1;
+  $("e-note").textContent = ev ? ev.note : "Custom window. Any dates work if forecast runs for the preceding two weeks are stored; otherwise backfill them first.";
+  const obs = truthSum(v, s, e, r, false), nrm = normSum(v, s, e, r);
+  let peak = null; for (let d = s; d <= e; d++) { const x = truth(v, r, d); if (x != null && (peak == null || x > peak.x)) peak = { d, x }; }
+  const tile = (label, value, note) => tiles.append(el("div", { class: "tile" }, [el("div", { class: "label", text: label }), el("div", { class: "value", text: value }), el("div", { class: "note", text: note || "" })]));
+  tile("Observed " + vname(), fmt(obs, 0), nd + " days, " + rname());
+  tile("Normal", fmt(nrm, 0), D.normals.years + " average");
+  tile("Anomaly", obs != null && nrm ? signed(100 * (obs - nrm) / Math.max(nrm, 1), 0) + "%" : "–", obs != null && nrm != null ? signed(obs - nrm, 0) + " " + vname() : "");
+  tile("Peak day", peak ? fmt(peak.x, 1) : "–", peak ? dlong(peak.d) : "");
+
+  // chart 1: forecast of the window total, by run
+  const t1 = [], rows = [], leadsShown = [1, 3, 5, 7, 10];
+  ms.forEach((m) => { const xs = [], ys = [], txt = [];
+    m.inits.forEach((q, i) => { const lead = (s * 24 + 6 - (q.day * 24 + q.hour)) / 24; if (lead < 0.2 || lead > 15.5) return;
+      const sum = fcSum(m, v, i, s, e, r); if (sum == null) return; xs.push(lead); ys.push(sum); txt.push(runLabel(q.key)); });
+    if (!xs.length) return;
+    t1.push(line(m, xs, ys, { mode: "lines+markers", marker: { size: 6, color: color(m) }, text: txt, hovertemplate: "%{y:.0f} · run %{text}<extra>" + m.label + "</extra>" }));
+    const at = (L) => { const k = xs.findIndex((x) => Math.abs(x - (L + 0.25)) < 0.01); return k < 0 ? null : ys[k]; };
+    rows.push([{ model: m }, ...leadsShown.map((L) => { const f = at(L); return obs == null || f == null ? fmt(f, 0) : delta(f - obs, 0); })]); });
+  const shapes = [], ann = [];
+  const href = (val, name, col, dashStyle) => { if (val == null) return; shapes.push({ type: "line", xref: "paper", x0: 0, x1: 1, y0: val, y1: val, line: { color: col, width: dashStyle === "solid" ? 2.5 : 1.5, dash: dashStyle } });
+    ann.push({ xref: "paper", x: 0, xanchor: "left", y: val, yanchor: "bottom", text: name + " " + fmt(val, 0), showarrow: false, font: { color: css("--ink-2"), size: 11 } }); };
+  if (t1.length) { href(nrm, "Normal", css("--muted"), "dot"); href(obs, "Observed", css("--ink"), "solid"); }
+  $("e-title1").textContent = "Forecast " + vname() + " for " + dlabel(s) + " to " + dlong(e) + ", by days before the event · " + rname();
+  const noRuns = "No stored runs cover this window. Backfill them with:  wxcc backfill --model all --start " + diso(s - 14) + " --end " + diso(s);
+  draw("e-chart1", t1, layout({ shapes, annotations: ann, hovermode: "closest", xaxis: { title: { text: "Days before the event starts" }, autorange: "reversed", dtick: 2 }, yaxis: { title: { text: vname() + " over the window" } } }), noRuns);
+  table("e-table", ["Forecast error (model − observed)", ...leadsShown.map((L) => L + " d before")], rows);
+
+  // chart 2: daily values from runs made N days before
+  const L = S.elead, days = []; for (let d = s - 3; d <= e + 3; d++) days.push(d);
+  const x = days.map(diso), t2 = [];
+  ms.forEach((m) => { const key = diso(s - L) + "T00"; if (!m.index.has(key)) return; const i = m.index.get(key);
+    const y = days.map((d) => fc(m, v, i, d - (s - L), r)); if (y.some((z) => z != null)) t2.push(line(m, x, y)); });
+  if (t2.length || truth(v, r, s) != null) { t2.push(normLine(x, days.map((d) => normal(v, r, d)))); const o = days.map((d) => truth(v, r, d)); if (o.some((z) => z != null)) t2.push(inkLine("Observed", x, o)); }
+  $("e-title2").textContent = "Daily " + vname() + " from 00Z runs made " + L + " day" + (L > 1 ? "s" : "") + " before · " + rname();
+  const band = [{ type: "rect", xref: "x", yref: "paper", x0: diso(s - 1) + " 12:00", x1: diso(e) + " 12:00", y0: 0, y1: 1, fillcolor: css("--wash"), line: { width: 0 }, layer: "below" }];
+  draw("e-chart2", t2, layout({ shapes: band, yaxis: { title: { text: vname() + " per day" }, rangemode: "tozero" }, xaxis: { tickformat: "%-d %b" } }), noRuns);
+}
+
+// ---------------------------------------------------------------- view: maps
+let MAPS = null;
+function mapsInit() { if (MAPS || !D.maps) return; const M = D.maps; MAPS = { ...M, d0: dnum(M.init), arr: {} }; for (const [id, b] of Object.entries(M.models)) MAPS.arr[id] = i16(b); }
+function divColor(t) { // t in [-1, 1] -> rgb through a neutral midpoint
+  const mid = hexrgb(css("--div-mid")), end = hexrgb(t < 0 ? css("--div-cool") : css("--div-warm")), f = Math.min(1, Math.abs(t));
+  return mid.map((x, i) => Math.round(x + (end[i] - x) * f));
+}
+function viewMaps() {
+  mapsInit(); const box = $("p-maps"); box.replaceChildren();
+  if (!MAPS) { $("p-title").textContent = "No maps stored yet"; box.append(el("div", { class: "empty", text: "No maps in the local cache. Run `wxcc fields pull` to download recent ones, or `wxcc update` after the next 00Z runs are out, then rebuild." })); return; }
+  const { ny, nx, d0 } = MAPS, cells = ny * nx, L = S.pday, ms = active().filter((m) => MAPS.arr[m.id]);
+  const get = (id) => MAPS.arr[id].subarray(L * cells, (L + 1) * cells);
+  const haveDay = ms.filter((m) => get(m.id)[Math.floor(cells / 2)] !== MISS);
+  const mean = new Float32Array(cells), cnt = new Uint8Array(cells);
+  haveDay.forEach((m) => { const a = get(m.id); for (let i = 0; i < cells; i++) if (a[i] !== MISS) { mean[i] += a[i] / SC; cnt[i]++; } });
+  for (let i = 0; i < cells; i++) mean[i] = cnt[i] ? mean[i] / cnt[i] : NaN;
+  const diff = S.pmode === "diff";
+  let span = 0;
+  if (diff) { haveDay.forEach((m) => { const a = get(m.id); for (let i = 0; i < cells; i += 3) if (a[i] !== MISS) span = Math.max(span, Math.abs(a[i] / SC - mean[i])); }); span = Math.max(4, Math.min(20, Math.ceil(span * 0.7 / 2) * 2)); }
+  else span = 45;
+  const centre = diff ? 0 : 65;
+  $("p-title").textContent = (diff ? "Difference from the model mean" : "Daily-mean temperature") + " · " + dlabel(d0 + L, true) + " · run of " + runLabel(MAPS.init);
+  $("p-lo").textContent = (diff ? "−" + span : centre - span) + " F"; $("p-hi").textContent = (diff ? "+" + span : centre + span) + " F";
+  $("p-unit").textContent = diff ? "colder / warmer than the mean of the models shown" : "centred on 65 F";
+  const sc = $("p-scale").getContext("2d"); for (let i = 0; i < 320; i++) { const c = divColor(i / 159.5 - 1); sc.fillStyle = "rgb(" + c.join(",") + ")"; sc.fillRect(i, 0, 1, 10); }
+  const lut = []; for (let i = 0; i <= 200; i++) lut.push(divColor(i / 100 - 1));
+  const items = diff ? haveDay.map((m) => ({ m })) : [{ mean: true }, ...haveDay.map((m) => ({ m }))];
+  if (!haveDay.length) { box.append(el("div", { class: "empty", text: "No selected model reaches this day." })); return; }
+  items.forEach((it) => {
+    const vals = new Float32Array(cells); let sum = 0, n = 0;
+    if (it.mean) vals.set(mean); else { const a = get(it.m.id); for (let i = 0; i < cells; i++) vals[i] = a[i] === MISS ? NaN : a[i] / SC - (diff ? mean[i] : 0); }
+    const cv = el("canvas", { width: nx * 4, height: Math.round(nx * 4 / 1.8) });
+    const off = document.createElement("canvas"); off.width = nx; off.height = ny; const octx = off.getContext("2d"), img = octx.createImageData(nx, ny);
+    for (let i = 0; i < cells; i++) { const x = vals[i]; if (isNaN(x)) { img.data[i * 4 + 3] = 0; continue; } sum += x; n++;
+      const c = lut[Math.max(0, Math.min(200, Math.round(((x - centre) / span + 1) * 100)))]; img.data[i * 4] = c[0]; img.data[i * 4 + 1] = c[1]; img.data[i * 4 + 2] = c[2]; img.data[i * 4 + 3] = 255; }
+    octx.putImageData(img, 0, 0);
+    const ctx = cv.getContext("2d"); ctx.imageSmoothingEnabled = false; ctx.drawImage(off, 0, 0, cv.width, cv.height);
+    if (MAPS.states) { const st = MAPS.states, kx = cv.width / (nx * MAPS.dlon), ky = cv.height / (ny * -MAPS.dlat), x0 = MAPS.lon0 - MAPS.dlon / 2, y0 = MAPS.lat0 - MAPS.dlat / 2;
+      ctx.strokeStyle = css("--ink"); ctx.globalAlpha = 0.45; ctx.lineWidth = 0.8; ctx.beginPath();
+      st.lines.forEach((ln) => { for (let k = 0; k < ln.length; k += 2) { const px = (ln[k] / st.scale - x0) * kx, py = (y0 - ln[k + 1] / st.scale) * ky; k ? ctx.lineTo(px, py) : ctx.moveTo(px, py); } });
+      ctx.stroke(); ctx.globalAlpha = 1; }
+    const label = it.mean ? "Mean of models shown" : it.m.label;
+    cv.addEventListener("pointermove", (evn) => { const b = cv.getBoundingClientRect(), cx = Math.floor((evn.clientX - b.left) / b.width * nx), cy = Math.floor((evn.clientY - b.top) / b.height * ny);
+      const x = vals[cy * nx + cx]; if (x == null || isNaN(x)) return hideTip();
+      showTip(evn, label + ": " + (diff ? signed(x) : fmt(x)) + " F at " + (MAPS.lat0 + cy * MAPS.dlat).toFixed(1) + "N, " + Math.abs(MAPS.lon0 + cx * MAPS.dlon).toFixed(1) + "W"); });
+    cv.addEventListener("pointerleave", hideTip);
+    const name = el("div", { class: "name" }, [document.createTextNode(label), el("span", { text: diff ? "mean diff " + signed(n ? sum / n : null) + " F" : "area mean " + fmt(n ? sum / n : null) + " F" })]);
+    box.append(el("div", { class: "map" }, [name, cv]));
+  });
+}
+function showTip(evn, text) { const t = $("tip"); t.textContent = text; t.hidden = false; const w = t.offsetWidth; t.style.left = Math.min(window.innerWidth - w - 8, evn.clientX + 12) + "px"; t.style.top = (evn.clientY + 14) + "px"; }
+function hideTip() { $("tip").hidden = true; }
+
+// ---------------------------------------------------------------- view: market
+function viewMarket() {
+  const K = D.market, body = $("k-body"); body.replaceChildren(); if (!K) return;
+  body.className = "view";
+  const card = (title, sub, id, cls) => { const c = el("div", { class: "card" }, [el("h2", { text: title }), el("p", { class: "sub", text: sub }), el("div", { class: "chart " + (cls || ""), id })]); body.append(c); return c; };
+  const conus = D.regions.findIndex((x) => x.id === "CONUS");
+  // 1. storage change vs weekly HDD
+  if (K.storage && K.storage.length) {
+    const pts = K.storage.map((w) => { const end = dnum(w.week_ending); const h = truthSum("hdd", end - 6, end, conus, false), c = truthSum("cdd", end - 6, end, conus, false);
+      return h == null ? null : { x: h, c, y: w.change, t: w.week_ending }; }).filter(Boolean);
+    const winter = pts.filter((p) => p.x >= 60);
+    let fit = null; if (winter.length > 8) { const mx = winter.reduce((a, p) => a + p.x, 0) / winter.length, my = winter.reduce((a, p) => a + p.y, 0) / winter.length;
+      const b = winter.reduce((a, p) => a + (p.x - mx) * (p.y - my), 0) / winter.reduce((a, p) => a + (p.x - mx) ** 2, 0); fit = { b, a: my - b * mx }; }
+    card("Weekly storage change vs weekly CONUS HDD", "Each dot is one EIA storage week (Lower 48 working gas, Bcf) against that week's population-weighted HDD from this pipeline."
+      + (fit ? " Fitted on weeks with at least 60 HDD: about " + fmt(-fit.b, 1) + " Bcf of extra withdrawal per additional weekly HDD." : ""), "k-c1");
+    const tr = [{ type: "scatter", mode: "markers", name: "Storage week", x: pts.map((p) => p.x), y: pts.map((p) => p.y), text: pts.map((p) => p.t),
+      marker: { size: 8, color: css("--s1"), line: { color: css("--surface"), width: 1.5 } }, hovertemplate: "week ending %{text}<br>%{x:.0f} HDD, %{y:+.0f} Bcf<extra></extra>" }];
+    if (fit) { const xs = [60, Math.max(...pts.map((p) => p.x))]; tr.push({ type: "scatter", mode: "lines", name: "Winter fit", x: xs, y: xs.map((x) => fit.a + fit.b * x), line: { color: css("--ink"), width: 1.5 }, hoverinfo: "skip" }); }
+    draw("k-c1", tr, layout({ hovermode: "closest", xaxis: { title: { text: "CONUS HDD over the storage week" }, showgrid: true }, yaxis: { title: { text: "Net change in storage (Bcf)" }, zeroline: true, zerolinecolor: css("--axis") } }));
+  }
+  // 2. Henry Hub and forecast revisions, stacked panels on one time axis
+  if (K.henry_hub && K.henry_hub.length) {
+    const gfs = MBY.gfs || MODELS[0], rev = new Map();
+    if (gfs) { const byDay = new Map(); gfs.inits.forEach((q, i) => { if (q.hour === 0) byDay.set(q.day, i); });
+      [...byDay.keys()].sort((a, b) => a - b).forEach((d) => { if (!byDay.has(d - 1)) return; const a = d + 1, b = d + 14;
+        const now = fcSum(gfs, "hdd", byDay.get(d), a, b, conus), was = fcSum(gfs, "hdd", byDay.get(d - 1), a, b, conus);
+        const nowC = fcSum(gfs, "cdd", byDay.get(d), a, b, conus), wasC = fcSum(gfs, "cdd", byDay.get(d - 1), a, b, conus);
+        if (now != null && was != null) rev.set(d, (now - was) + (nowC != null && wasC != null ? nowC - wasC : 0)); }); }
+    const rd = [...rev.keys()].sort((a, b) => a - b), from = rd.length ? rd[0] : dnum(K.henry_hub[K.henry_hub.length - 1].date) - 120;
+    const hh = K.henry_hub.filter((p) => dnum(p.date) >= from - 5);
+    card("Henry Hub spot price and GFS forecast revisions", "Top: Henry Hub daily spot ($/MMBtu). Bottom: change from the previous day's 00Z GFS run in total CONUS degree days (HDD + CDD) over the same 14 forecast days. Two panels share the date axis; they are not on a common scale.", "k-c2", "");
+    const tr = [{ type: "scatter", mode: "lines", name: "Henry Hub spot", x: hh.map((p) => p.date), y: hh.map((p) => p.price), line: { color: css("--ink"), width: 2 }, hovertemplate: "$%{y:.2f}<extra>Henry Hub</extra>", xaxis: "x", yaxis: "y" },
+      { type: "bar", name: "Forecast revision", x: rd.map(diso), y: rd.map((d) => rev.get(d)), marker: { color: rd.map((d) => rev.get(d) >= 0 ? css("--div-warm") : css("--div-cool")) }, hovertemplate: "%{y:+.0f} degree days<extra>GFS revision</extra>", xaxis: "x", yaxis: "y2" }];
+    const lay = layout({ grid: { rows: 2, columns: 1, shared_xaxes: true }, xaxis: { tickformat: "%-d %b %Y", nticks: 8 }, yaxis: { title: { text: "$/MMBtu" }, domain: [0.56, 1] } });
+    const ax = lay.yaxis; lay.yaxis2 = { ...ax, title: { text: "Degree days, 14-day total" }, domain: [0, 0.44], zeroline: true, zerolinecolor: css("--axis"), anchor: "x" }; lay.bargap = 0.3;
+    draw("k-c2", tr, lay);
+  }
+  // 3. power prices vs regional degree days
+  (K.power || []).forEach((z, k) => { const r = D.regions.findIndex((x) => x.id === z.region); if (r < 0 || !z.series.length) return;
+    const pts = z.series.map((p) => { const d = dnum(p.date), h = truth("hdd", r, d), c = truth("cdd", r, d); return h == null ? null : { x: h + c, y: p.price, t: p.date, hot: c > h }; }).filter(Boolean);
+    card(z.label + " day-ahead price vs " + D.regions[r].name + " degree days", "Each dot is one day: the daily average day-ahead price ($/MWh) against that day's HDD + CDD for the region. Source: " + z.source + ".", "k-p" + k, "short");
+    const grp = (hot, name, col) => ({ type: "scatter", mode: "markers", name, x: pts.filter((p) => p.hot === hot).map((p) => p.x), y: pts.filter((p) => p.hot === hot).map((p) => p.y), text: pts.filter((p) => p.hot === hot).map((p) => p.t),
+      marker: { size: 7, color: col, line: { color: css("--surface"), width: 1 } }, hovertemplate: "%{text}<br>%{x:.1f} degree days, $%{y:.0f}/MWh<extra></extra>" });
+    draw("k-p" + k, [grp(false, "Heating days", css("--div-cool")), grp(true, "Cooling days", css("--div-warm"))], layout({ hovermode: "closest", xaxis: { title: { text: "Degree days (HDD + CDD)" }, showgrid: true }, yaxis: { title: { text: "$/MWh" }, rangemode: "tozero" } })); });
+  if (K.notes && K.notes.length) body.append(el("div", { class: "card" }, [el("h2", { text: "Sources and gaps" }), el("ul", {}, K.notes.map((n) => el("li", { class: "sub", text: n })))]));
+}
+
+// ---------------------------------------------------------------- view: data
+function viewData() {
+  const rows = D.inventory.map((m) => [m.label, m.family, m.provider, m.available_from, m.lead_days ? m.lead_days + " d" : "", m.stored_runs ? String(m.stored_runs) : (m.stored_days ? m.stored_days + " days" : "0"),
+    m.stored_first ? m.stored_first.replace("T", " ") + " → " + m.stored_last.replace("T", " ") : "–", { text: m.licence, cls: "txt" }, { text: m.note, cls: "txt" }]);
+  table("d-table", ["Model", "Type", "Run by", "Available from", "Lead", "Stored runs", "Stored range", "Licence", "Notes"], rows);
+  const lab = D.lab || []; $("d-labcard").hidden = !lab.length;
+  if (lab.length) table("d-lab", ["Model", "Start time", "Initial data", "GPU", "Inference", "Session", "Est. compute units", "Recorded"],
+    lab.map((x) => [x.model.replace("lab_", ""), x.init_time.replace("T", " "), x.source || "–", x.gpu || "–", x.run_s != null ? x.run_s + " s" : "–",
+      x.session_s != null ? (x.session_s / 60).toFixed(1) + " min" : "–", x.units != null ? String(x.units) : "–", x.written_at.replace("T", " ")]));
+}
+
+// ---------------------------------------------------------------- controls and routing
+const VIEWS = { models: viewModels, verification: viewVerification, events: viewEvents, maps: viewMaps, market: viewMarket, data: viewData };
+function render() {
+  for (const k of Object.keys(VIEWS)) $("v-" + k).hidden = k !== S.view;
+  document.querySelectorAll("#tabs a").forEach((a) => a.getAttribute("href") === "#" + S.view ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current"));
+  $("filters").hidden = S.view === "data";
+  $("f-region").disabled = $("f-var").disabled = S.view === "maps" || S.view === "market";
+  VIEWS[S.view]();
+}
+function route() { const h = location.hash.replace("#", ""); S.view = VIEWS[h] && (h !== "market" || D.market) ? h : "models"; render(); }
+function opt(sel, value, text, selected) { const o = el("option", { value, text }); if (selected) o.selected = true; sel.append(o); }
+function setup() {
+  const fr = $("fresh");
+  const chip = (label, value) => fr.append(el("span", {}, [document.createTextNode(label + " "), el("b", { text: value })]));
+  chip("Latest run", runLabel(allRuns[allRuns.length - 1])); chip("ERA5 through", D.truth.era5_through ? dlong(dnum(D.truth.era5_through)) : "–");
+  chip("Observed through", dlong(lastTruth)); chip("Built", D.built);
+  D.regions.forEach((r) => opt($("f-region"), r.id, r.id + " · " + r.name, r.id === S.region));
+  $("f-var").value = S.v;
+  const chips = $("f-models");
+  MODELS.forEach((m) => { const b = el("button", { class: "chip", type: "button", "aria-pressed": String(S.on.includes(m.id)), title: m.note }, [el("span", { class: "key" }), document.createTextNode(m.label)]);
+    b.dataset.id = m.id; b.addEventListener("click", () => { const on = S.on.includes(m.id); S.on = on ? S.on.filter((x) => x !== m.id) : [...S.on, m.id]; b.setAttribute("aria-pressed", String(!on)); store.set("models", S.on); render(); }); chips.append(b); });
+  recentRuns.forEach((k) => opt($("m-run"), k, runLabel(k) + " (" + MODELS.filter((m) => m.index.has(k)).length + " models)", k === S.run));
+  MODELS.forEach((m) => opt($("m-model"), m.id, m.label)); S.model = MODELS[0] ? MODELS[0].id : null;
+  [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 14].forEach((L) => opt($("v-lead"), L, "Day " + L, L === S.lead));
+  D.events.forEach((e) => opt($("e-event"), e.id, e.name, e.id === S.event)); opt($("e-event"), "custom", "Custom dates…");
+  [1, 2, 3, 5, 7, 10].forEach((L) => opt($("e-lead"), L, L + " day" + (L > 1 ? "s" : "") + " before", L === S.elead));
+  if (D.maps) for (let L = 0; L < D.maps.ndays; L++) opt($("p-day"), L, "Day " + L + " · " + dlabel(dnum(D.maps.init) + L, true), L === S.pday);
+  if (D.market) $("tab-market").hidden = false;
+  const on = (id, fn) => $(id).addEventListener("change", (e) => { fn(e.target.value); render(); });
+  on("f-region", (x) => { S.region = x; store.set("region", x); }); on("f-var", (x) => { S.v = x; store.set("var", x); });
+  on("m-run", (x) => { S.run = x; }); on("m-window", (x) => { S.window = x; }); on("m-model", (x) => { S.model = x; });
+  on("v-period", (x) => { S.period = x; }); on("v-cycle", (x) => { S.cycle = x; }); on("v-lead", (x) => { S.lead = +x; });
+  on("e-lead", (x) => { S.elead = +x; }); on("p-day", (x) => { S.pday = +x; }); on("p-mode", (x) => { S.pmode = x; });
+  const applyEvent = () => { const ev = D.events.find((e) => e.id === S.event); if (!ev) return;
+    $("e-start").value = ev.start; $("e-end").value = ev.end; S.es = dnum(ev.start); S.ee = dnum(ev.end);
+    S.v = ev.kind === "heat" ? "cdd" : "hdd"; $("f-var").value = S.v; S.region = ev.region; $("f-region").value = S.region; };
+  on("e-event", (x) => { S.event = x; applyEvent(); });
+  const custom = () => { S.event = "custom"; $("e-event").value = "custom"; S.es = $("e-start").value ? dnum($("e-start").value) : null; S.ee = $("e-end").value ? dnum($("e-end").value) : null; };
+  on("e-start", custom); on("e-end", custom);
+  $("e-start").min = $("e-end").min = D.truth.start; $("e-start").max = $("e-end").max = diso(lastTruth);
+  { const ev = D.events.find((e) => e.id === S.event); if (ev) { $("e-start").value = ev.start; $("e-end").value = ev.end; S.es = dnum(ev.start); S.ee = dnum(ev.end); } }
+  let firstEvents = true;
+  window.addEventListener("hashchange", () => { if (location.hash === "#events" && firstEvents) { firstEvents = false; applyEvent(); } route(); });
+  if (location.hash === "#events") { firstEvents = false; applyEvent(); }
+  const paint = () => { document.querySelectorAll(".chip").forEach((b) => b.style.setProperty("--c", color(MBY[b.dataset.id]))); render(); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", paint);
+  new MutationObserver(paint).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  $("foot").textContent = "Degree days: base 65 F, population-weighted (2020 Census), day = 06Z to 06Z. Truth: ERA5 (contains modified Copernicus Climate Change Service information). "
+    + "Forecasts: NOAA GFS and AIGFS (public domain); ECMWF IFS and AIFS open data (CC BY 4.0, © ECMWF); GraphCast, Pangu-Weather, FourCastNet and Aurora as run by NOAA/CIRA (Radford et al. 2025). "
+    + "Normals: " + D.normals.years + " ERA5. A personal research tool, not a forecast service. Pipeline v" + D.version + ".";
+  document.querySelectorAll(".chip").forEach((b) => b.style.setProperty("--c", color(MBY[b.dataset.id])));
+  const closed = store.get("closed", []);
+  document.querySelectorAll("details.explain").forEach((d) => { const key = d.parentElement.id; if (closed.includes(key)) d.open = false;
+    d.addEventListener("toggle", () => { const c = store.get("closed", []).filter((k) => k !== key); if (!d.open) c.push(key); store.set("closed", c); }); });
+  route();
+}
+setup();
+})();
+</script>
