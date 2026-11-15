@@ -119,6 +119,23 @@ def inventory() -> None:
 
 
 @app.command()
+def check() -> None:
+    """Verify the store and the cache: readable files, no duplicates, a manifest per run, sizes."""
+    from . import fields
+
+    report = store.check()
+    data_mb = sum(p.stat().st_size for p in store.ROOT.parent.rglob("*") if p.is_file()) / 1e6
+    typer.echo(f"Store: {report['files']} files, {report['rows']:,} rows, {report['runs']:,} forecast runs, {data_mb:.1f} MB under data/")
+    typer.echo(f"  unreadable files: {len(report['unreadable'])}" + ("  " + ", ".join(report["unreadable"][:5]) if report["unreadable"] else ""))
+    typer.echo(f"  duplicate keys:   {report['duplicate_keys']}")
+    typer.echo(f"  runs without a manifest: {report['runs_without_manifest']}"
+               + (f" (reconstructed {report['manifests_added']})" if report["manifests_added"] else ""))
+    typer.echo(f"Cache: {fields.cache_size_gb():.2f} GB of {fields.CACHE_CAP_GB:g} GB cap")
+    if report["unreadable"] or report["duplicate_keys"]:
+        raise typer.Exit(1)
+
+
+@app.command()
 def models() -> None:
     """List every model: what it is, where it comes from and how far back it goes."""
     rows = [

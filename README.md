@@ -87,14 +87,16 @@ Each needs a GitHub token saved as the Colab secret `GITHUB_TOKEN` (fine-grained
 
 ## Storage
 
-| Where | What | Size |
+| Where | What | Size now |
 |---|---|---|
-| `data/regional/` | Regional series: one Parquet file per init day, monthly truth files | see below |
-| `data/manifests/` | One JSON line per run: source, steps, settings | |
-| `data/market/` | Henry Hub, storage, power prices (CSV) | |
-| `data/static/` | Population weights, state outlines | |
-| `.cache/` (not in git) | Daily temperature maps; capped at 3 GB and pruned automatically | |
-| GitHub Releases `fields-<year>` | Long-term copies of the maps, one zip per model and month | |
+| `data/regional/` | Regional series: one Parquet file per init day, monthly truth files | 8 MB (3,255 runs, 3,962 truth days) |
+| `data/manifests/` | One JSON line per run: source, steps, settings | 1.5 MB |
+| `data/market/` | Henry Hub, storage, power prices (CSV) | 0.1 MB |
+| `data/static/` | Population weights, state outlines | 0.1 MB |
+| `.cache/` (not in git) | Daily temperature maps; capped at 3 GB and pruned automatically | 0.65 GB after the full backfill |
+| GitHub Releases `fields-<year>` | Long-term copies of the maps, one zip per model and month | written by the scheduled job |
+
+A year of twice-daily runs of all eight models adds about 15 MB to the repository.
 
 Downloads are streamed and cropped to CONUS in memory; no global file is ever written to disk.
 

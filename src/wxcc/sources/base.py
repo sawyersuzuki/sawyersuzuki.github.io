@@ -31,6 +31,7 @@ class RunData:
 class Adapter:
     max_step_h: int = 240
     mb_per_step: float = 0.6  # typical download per 6-hourly field
+    wall_s_per_run: float = 2.5  # measured wall time per run during a long backfill, default settings
 
     def steps(self, init: pd.Timestamp) -> list[int]:
         return list(range(0, self.max_step_h + 1, STEP_H))

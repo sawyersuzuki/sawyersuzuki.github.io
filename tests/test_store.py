@@ -107,3 +107,16 @@ def test_lab_runs_are_stored_separately_but_queried_together(tmp_path):
     path = store.write_forecast(rows(["2024-01-01"], init_time=init, model="lab_fcn3"), root=tmp_path, lab=True)
     assert path == tmp_path / "lab" / "lab_fcn3" / "2024010100.parquet"
     assert len(store.query(model="lab_fcn3", root=tmp_path)) == len(REGIONS)
+
+
+def test_check_reconstructs_missing_manifests(tmp_path, monkeypatch):
+    monkeypatch.setattr(store, "MANIFESTS", tmp_path / "manifests")
+    init = pd.Timestamp("2024-01-01 00:00")
+    store.write_forecast(rows(["2024-01-01", "2024-01-02"], init_time=init, model="gfs"), root=tmp_path / "r")
+    store.write_analysis(rows(["2024-01-01"]), root=tmp_path / "r")
+    report = store.check(root=tmp_path / "r")
+    assert report["runs"] == 1 and report["runs_without_manifest"] == 1 and report["manifests_added"] == 1
+    assert report["unreadable"] == [] and report["duplicate_keys"] == 0
+    rec = store.read_manifests("gfs").iloc[0]
+    assert bool(rec["reconstructed"]) and rec["first_valid"] == "2024-01-01" and rec["last_valid"] == "2024-01-02"
+    assert store.check(root=tmp_path / "r")["runs_without_manifest"] == 0

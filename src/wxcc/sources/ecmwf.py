@@ -49,6 +49,7 @@ def candidates(model: str, init: pd.Timestamp) -> list[str]:
 class _Ecmwf(Adapter):
     model = ""
     label = ""
+    wall_s_per_run = 4.5  # ECMWF's bucket throttles bursts, so runs are fetched gently
 
     def _directory(self, init: pd.Timestamp) -> str:
         stream = "oper" if self.model == "aifs" else _stream(init)

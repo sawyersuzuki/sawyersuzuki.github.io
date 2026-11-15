@@ -22,7 +22,6 @@ from .sources.http import NotAvailable
 
 FORECAST_METHOD = "mean6h"  # the one definition every model supports
 FIELD_CYCLE = 0  # maps are kept for 00Z runs only, to bound storage
-SECONDS_PER_RUN = 5.0
 RUN_WORKERS = int(os.environ.get("WXCC_RUN_WORKERS", "4"))
 KB_PER_RUN = 2.5
 PROVISIONAL_DAYS = 21  # how far back GFS analysis may stand in for missing ERA5
@@ -68,7 +67,7 @@ class Plan:
             f"  download  ~{self.download_mb:,.0f} MB streamed, cropped to CONUS in memory\n"
             f"  disk      ~{self.stored_kb:,.0f} KB added to the repo"
             + (f"; {self.note}" if self.note else "")
-            + f"\n  runtime   ~{self.est_minutes:.1f} min"
+            + f"\n  runtime   ~{self.est_minutes:.0f} min (rough; depends on your connection)"
         )
 
 
@@ -196,7 +195,7 @@ def plan_forecast(model_id: str, start: str, end: str, cycles: tuple[int, ...] |
     return Plan(
         model=model_id, method=FORECAST_METHOD, items=todo, unit="runs",
         skipped=len(inits) - len(todo), unavailable=n_wanted - len(inits),
-        download_mb=mb, est_minutes=max(len(todo) * SECONDS_PER_RUN / RUN_WORKERS / 60, 0.1),
+        download_mb=mb, est_minutes=max(len(todo) * m.adapter.wall_s_per_run / 60, 0.1),
         stored_kb=len(todo) * KB_PER_RUN,
         note=f"~{n_maps * 0.35:,.0f} MB of maps in the local cache (capped at {fields.CACHE_CAP_GB:g} GB)",
     )
@@ -255,6 +254,8 @@ def run_forecast(plan: Plan, progress=print, workers: int = RUN_WORKERS) -> RunR
             else:
                 report.failed.append((init, message))
                 progress(f"  {plan.model} {init:%Y-%m-%d %HZ} FAILED: {message[:200]}")
+            if n % 20 == 0:
+                store.flush_manifests()  # so an interrupted backfill keeps its manifests
             if n % 20 == 0 or n == len(plan.items):
                 progress(f"  {plan.model}: {n}/{len(plan.items)} runs processed "
                          f"({len(report.stored)} stored, {len(report.not_published)} not published)")

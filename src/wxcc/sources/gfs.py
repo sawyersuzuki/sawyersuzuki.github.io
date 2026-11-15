@@ -47,6 +47,7 @@ def gfs_url(init: pd.Timestamp, step: int) -> str:
 class GFS(Adapter):
     max_step_h = 384
     mb_per_step = 0.85
+    wall_s_per_run = 2.2
 
     def fetch(self, init: pd.Timestamp) -> RunData:
         return gather_steps(

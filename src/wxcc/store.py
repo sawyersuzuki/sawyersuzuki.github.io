@@ -14,6 +14,7 @@ job is safe.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import threading
@@ -109,6 +110,24 @@ def write_analysis(df: pd.DataFrame, root: Path = ROOT) -> list[Path]:
     return paths
 
 
+@contextlib.contextmanager
+def _file_lock(path: Path):
+    """Exclusive lock across processes, so parallel backfills can share a day file.
+
+    One lock file per directory, never deleted (deleting a lock file while
+    another process waits on it would let two writers in at once).
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path.parent / ".write.lock", "w") as handle:
+        try:
+            import fcntl
+
+            fcntl.flock(handle, fcntl.LOCK_EX)
+        except ImportError:  # no fcntl on Windows; the in-process lock still applies
+            pass
+        yield
+
+
 def forecast_path(init_time: pd.Timestamp, root: Path = ROOT) -> Path:
     t = pd.Timestamp(init_time)
     return root / "forecast" / f"{t:%Y}" / f"{t:%Y%m%d}.parquet"
@@ -121,7 +140,7 @@ def lab_path(model: str, init_time: pd.Timestamp, root: Path = ROOT) -> Path:
 def write_forecast(df: pd.DataFrame, root: Path = ROOT, lab: bool = False) -> Path:
     model, init = df["model"].iloc[0], df["init_time"].iloc[0]
     path = lab_path(model, init, root) if lab else forecast_path(init, root)
-    with _write_lock:
+    with _write_lock, _file_lock(path):
         _upsert(path, df)
     return path
 
@@ -167,6 +186,20 @@ def write_manifest(*, model: str, init_time: pd.Timestamp, source: str, method: 
     return record
 
 
+def _merge_manifest_file(path: Path, records: list[dict]) -> None:
+    existing = {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            if line.strip():
+                rec = json.loads(line)
+                existing[rec["init_time"]] = rec
+    existing.update({r["init_time"]: r for r in records})
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text("".join(json.dumps(existing[k], sort_keys=True) + "\n" for k in sorted(existing)))
+    os.replace(tmp, path)
+
+
 def flush_manifests(root: Path | None = None) -> int:
     """Append queued manifests to data/manifests/<model>/<year>.jsonl (one line per run)."""
     root = root or MANIFESTS
@@ -176,17 +209,8 @@ def flush_manifests(root: Path | None = None) -> int:
     for rec in pending:
         by_file.setdefault(root / rec["model"] / f"{rec['init_time'][:4]}.jsonl", []).append(rec)
     for path, records in by_file.items():
-        existing = {}
-        if path.exists():
-            for line in path.read_text().splitlines():
-                if line.strip():
-                    rec = json.loads(line)
-                    existing[rec["init_time"]] = rec
-        existing.update({r["init_time"]: r for r in records})
-        path.parent.mkdir(parents=True, exist_ok=True)
-        tmp = path.with_name(path.name + ".tmp")
-        tmp.write_text("".join(json.dumps(existing[k], sort_keys=True) + "\n" for k in sorted(existing)))
-        os.replace(tmp, path)
+        with _file_lock(path):
+            _merge_manifest_file(path, records)
     return len(pending)
 
 
@@ -256,3 +280,39 @@ def inventory(root: Path = ROOT) -> pd.DataFrame:
         GROUP BY ALL ORDER BY ALL
     """
     return duckdb.execute(sql, [files]).df()
+
+
+def check(root: Path = ROOT, repair: bool = True) -> dict:
+    """Verify the store: every file readable, no duplicate keys, a manifest for every run.
+
+    With ``repair`` (the default) runs that have data but no manifest get a
+    reconstructed one, marked as such. This can happen when a backfill is killed.
+    """
+    report = {"files": 0, "unreadable": [], "rows": 0, "duplicate_keys": 0, "runs": 0, "manifests_added": 0}
+    runs: dict[tuple[str, pd.Timestamp], dict] = {}
+    for path in sorted(root.rglob("*.parquet")):
+        report["files"] += 1
+        try:
+            df = pd.read_parquet(path)
+        except Exception:
+            report["unreadable"].append(str(path))
+            continue
+        report["rows"] += len(df)
+        report["duplicate_keys"] += int(df.duplicated(KEY).sum())
+        fc = df[df["kind"] == "forecast"]
+        for (model, init), part in fc.groupby(["model", "init_time"]):
+            runs[(model, pd.Timestamp(init))] = {
+                "source": part["source"].iloc[0], "first": part["valid_date"].min(), "last": part["valid_date"].max(),
+            }
+    report["runs"] = len(runs)
+    manifests = read_manifests()
+    have = set(zip(manifests["model"], manifests["init_time"])) if not manifests.empty else set()
+    missing = [(k, v) for k, v in runs.items() if (k[0], f"{k[1]:%Y-%m-%dT%H:%M}Z") not in have]
+    report["runs_without_manifest"] = len(missing)
+    if repair and missing:
+        for (model, init), info in missing:
+            write_manifest(model=model, init_time=init, source=info["source"], method="mean6h", n_steps=0,
+                           missing_steps=[], first_valid=info["first"], last_valid=info["last"],
+                           extra={"reconstructed": True, "n_steps": None})
+        report["manifests_added"] = flush_manifests()
+    return report

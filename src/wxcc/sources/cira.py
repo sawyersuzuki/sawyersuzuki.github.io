@@ -38,6 +38,9 @@ def _unshuffle(raw: bytes, itemsize: int) -> bytes:
 class CIRA(Adapter):
     max_step_h = 240
     mb_per_step = 1.45
+    # The HDF5 library reads one remote file header at a time per process, so these runs do not
+    # speed up with more threads. To go faster, run one `wxcc backfill` process per model.
+    wall_s_per_run = 4.5
 
     def __init__(self, code: str, label: str):
         self.code, self.label = code, label

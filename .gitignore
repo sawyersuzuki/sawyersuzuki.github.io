@@ -12,3 +12,4 @@ dist/
 # Built dashboard (regenerate with: wxcc build)
 site/
 *.tmp
+.write.lock

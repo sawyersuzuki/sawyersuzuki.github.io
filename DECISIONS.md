@@ -54,7 +54,8 @@ Assumptions, changes to the original brief, and trade-offs. Facts marked "checke
 - **Tier 1, in git** (`data/`): regional series as Parquet, one file per init day shared by all models, plus monthly truth files, run manifests (JSONL) and market CSVs. A file per run was tried first and was 11 KB of mostly Parquet overhead; per-day files are about ten times smaller. Only the last few days' files change, so history grows roughly with the data.
 - **Tier 2, off git:** daily-mean temperature maps for 00Z runs and for truth, as small compressed files in `.cache/fields/`, bundled per model and month into GitHub Release assets (`wxcc fields publish` / `pull`).
 - **Local cache cap:** 3 GB, pruned least-recently-used after every update and pull. Downloads are streamed and cropped in memory; nothing global is written to disk.
-- **Measured footprint** after the history backfill: see the table in README.md.
+- **Measured footprint** after the history backfill (3,255 forecast runs across eight models, 3,962 days of ERA5 truth, a year of market data): 11 MB under `data/` in 454 files; 0.65 GB in the map cache; the built dashboard is 7 MB. About 2.4 KB per stored run, so a year of twice-daily runs of eight models adds roughly 15 MB.
+- **Measured speed** of a long backfill from a cloud machine: about 2 s per run for NOAA GRIB models and 4-5 s per run for ECMWF (their bucket throttles bursts) and for the NOAA/CIRA archive (the HDF5 library reads one remote header at a time per process). Running one `wxcc backfill` process per model in parallel is safe (writes are locked across processes) and reached about 2.7 runs per second in total. Backfill estimates use these measured figures.
 - **Colab:** per-run estimates are in the notebooks; each run records its measured time and estimated units in its manifest.
 - **GitHub Actions:** two runs a day at about 5 minutes each, roughly 300 of the 2,000 free minutes a month. Pages deploys only when the repository is public.
 
@@ -83,10 +84,17 @@ Day-to-day variation matches closely (Uri's peak day in West South Central: 49.9
 
 **3. Cross-checks built into the pipeline.** 33 unit tests cover the degree-day maths, day windowing, weighting, the non-linearity of HDD, store idempotency, manifests, and both lab ingest paths. The lab path was run end to end on CPU with Earth2Studio 0.20.0 and its Persistence model.
 
+## Gaps found in the public archives
+
+- **NOAA/CIRA archive:** about a quarter of the twice-daily runs between August and mid-November 2026 are absent for all four models (the same dates for each), and Aurora only starts on 23 January 2025. Backfill reports these as "not in the archive".
+- **NOAA GFS bucket:** six cycles in early February 2021 are missing (for example 2 Feb 00Z and 6 Feb 00Z and 12Z), which leaves a hole in the Uri run sequence about a week before the event. NCAR's archive has complete GFS history and could fill it.
+- **ARCO-ERA5:** its metadata can claim a later end date than the data actually written, and single hours are sometimes missing in the latest week. The reader drops incomplete days and GFS analysis fills them.
+
 ## Things that are not done or not verified
 
 - **Colab GPU runs.** The notebooks were executed on CPU with a test model only. No GPU model has been run, so memory fit and compute-unit costs are estimates. CorrDiff in particular may not fit a Colab Pro GPU.
-- **Scheduled workflow.** Pushed and syntactically valid; its first scheduled run had not happened when this was written.
+- **Map bundles on GitHub Releases.** The cloud session that built this is not allowed to create releases, so `wxcc fields publish` and `pull` have not been exercised, and the maps for the backfilled history exist only in that session's cache. The scheduled workflow publishes maps from its first run onward. Historical maps can be regenerated with `wxcc backfill --refresh` for the dates wanted; the dashboard's map view only needs the latest run.
+- **Scheduled workflow.** See the note at the end of this file for the result of its first run.
 - **Ensembles** (IFS ENS, AIFS ENS, GEFS): deferred, as the brief allowed.
 - **Precipitation and wind maps:** deferred to a later phase, as the brief allowed. The adapters fetch one GRIB field by name, so adding a variable is a small change.
 - **ERCOT and PJM prices; Henry Hub futures:** need keys or paid data.
