@@ -1,4 +1,5 @@
-"""Census divisions for the contiguous US (48 states + DC)."""
+"""Regions: the nine census divisions (contiguous states + DC), a few
+market-relevant states and state groups, and the whole of CONUS."""
 
 from __future__ import annotations
 
@@ -14,9 +15,20 @@ DIVISIONS: dict[str, tuple[int, str, tuple[str, ...]]] = {
     "MTN": (8, "Mountain", ("04", "08", "16", "30", "32", "35", "49", "56")),
     "PAC": (9, "Pacific (contiguous)", ("06", "41", "53")),
 }
+# Sub-regions that matter for specific markets or events: code -> (name, state FIPS codes)
+EXTRA_REGIONS: dict[str, tuple[str, tuple[str, ...]]] = {
+    "TX": ("Texas", ("48",)),  # close to the ERCOT footprint
+    "CA": ("California", ("06",)),  # close to the CAISO footprint
+    "PNW": ("Pacific Northwest (WA, OR)", ("41", "53")),
+    "NY": ("New York", ("36",)),  # the NYISO footprint
+}
 CONUS = "CONUS"
-REGIONS: tuple[str, ...] = tuple(DIVISIONS) + (CONUS,)
-REGION_NAMES = {code: name for code, (_, name, _) in DIVISIONS.items()} | {CONUS: "Contiguous US"}
+REGIONS: tuple[str, ...] = tuple(DIVISIONS) + tuple(EXTRA_REGIONS) + (CONUS,)
+REGION_NAMES = (
+    {code: name for code, (_, name, _) in DIVISIONS.items()}
+    | {code: name for code, (name, _) in EXTRA_REGIONS.items()}
+    | {CONUS: "Contiguous US"}
+)
 CPC_NUMBER = {code: num for code, (num, _, _) in DIVISIONS.items()}
 
 STATE_TO_DIVISION: dict[str, str] = {

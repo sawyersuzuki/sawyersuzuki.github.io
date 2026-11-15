@@ -58,12 +58,18 @@ def test_query_filters_and_inventory(tmp_path):
     store.write_analysis(rows(["2024-01-01", "2024-01-02"]), root=tmp_path)
     init = pd.Timestamp("2024-01-01 00:00")
     path = store.write_forecast(rows(["2024-01-01", "2024-01-02"], init_time=init, model="gfs"), root=tmp_path)
-    assert path == tmp_path / "gfs" / "forecast" / "2024" / "2024010100.parquet"
-    assert len(store.query(model="gfs", region="ENC", root=tmp_path)) == 2
+    assert path == tmp_path / "forecast" / "2024" / "20240101.parquet"
+    # a second model and a second cycle share the day file without clobbering each other
+    store.write_forecast(rows(["2024-01-02"], init_time=init, model="ifs"), root=tmp_path)
+    store.write_forecast(rows(["2024-01-02"], init_time=init + pd.Timedelta(hours=12), model="gfs"), root=tmp_path)
+    assert store.stored_runs("gfs", init, init, root=tmp_path) == {init, init + pd.Timedelta(hours=12)}
+    assert store.stored_runs("ifs", init, init, root=tmp_path) == {init}
+    assert store.stored_runs("aifs", init, init, root=tmp_path) == set()
+    assert len(store.query(model="gfs", region="ENC", root=tmp_path)) == 3
     assert len(store.query(model="gfs", init="2024-01-01T00", start="2024-01-02", root=tmp_path)) == len(REGIONS)
     assert store.query(model="nope", root=tmp_path).empty
     inv = store.inventory(root=tmp_path).set_index("model")
-    assert inv.loc["gfs", "runs"] == 1 and inv.loc["era5", "valid_days"] == 2
+    assert inv.loc["gfs", "runs"] == 2 and inv.loc["era5", "valid_days"] == 2
 
 
 def test_era5_chunk_index():
@@ -80,3 +86,24 @@ def test_parse_cpc_file():
     assert set(df["region"]) == {"NE", "ENC", "CONUS"}
     got = df.set_index(["region", "valid_date"])["value"]
     assert got[("ENC", pd.Timestamp("2026-01-02"))] == 46
+
+
+def test_manifests_round_trip_and_upsert(tmp_path):
+    kw = dict(model="gfs", source="test", method="mean6h", n_steps=65, missing_steps=[],
+              first_valid=pd.Timestamp("2024-01-01"), last_valid=pd.Timestamp("2024-01-16"))
+    store.write_manifest(init_time=pd.Timestamp("2024-01-01 00:00"), **kw)
+    store.write_manifest(init_time=pd.Timestamp("2024-01-01 12:00"), **kw)
+    assert store.flush_manifests(root=tmp_path) == 2
+    store.write_manifest(init_time=pd.Timestamp("2024-01-01 00:00"), **(kw | {"n_steps": 60}))
+    store.flush_manifests(root=tmp_path)
+    df = store.read_manifests("gfs", root=tmp_path)
+    assert len(df) == 2
+    assert df.set_index("init_time").loc["2024-01-01T00:00Z", "n_steps"] == 60
+    assert df["variables"].iloc[0] == ["t2m"]
+
+
+def test_lab_runs_are_stored_separately_but_queried_together(tmp_path):
+    init = pd.Timestamp("2024-01-01 00:00")
+    path = store.write_forecast(rows(["2024-01-01"], init_time=init, model="lab_fcn3"), root=tmp_path, lab=True)
+    assert path == tmp_path / "lab" / "lab_fcn3" / "2024010100.parquet"
+    assert len(store.query(model="lab_fcn3", root=tmp_path)) == len(REGIONS)

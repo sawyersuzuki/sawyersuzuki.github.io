@@ -9,3 +9,5 @@ dist/
 # Secrets never go in the repo
 .env
 *.key
+# Built dashboard (regenerate with: wxcc build)
+site/

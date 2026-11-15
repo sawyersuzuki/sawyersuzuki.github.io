@@ -58,19 +58,22 @@ def chunk_index(time: pd.Timestamp) -> int:
     return int((pd.Timestamp(time) - EPOCH) // pd.Timedelta(hours=1))
 
 
-def _fetch_one(s: requests.Session, time: pd.Timestamp) -> np.ndarray:
+def _fetch_one(s: requests.Session, time: pd.Timestamp) -> np.ndarray | None:
     resp = s.get(f"{STORE}/{VARIABLE}/{chunk_index(time)}.0.0", timeout=120)
+    if resp.status_code == 404:
+        return None  # not written yet; the store's metadata can run ahead of its data
     resp.raise_for_status()
     field = np.frombuffer(_BLOSC.decode(resp.content), dtype="<f4").reshape(GLOBAL_SHAPE)
-    return field[_ROWS, _COLS].copy()
+    crop = field[_ROWS, _COLS]
+    return None if np.isnan(crop).any() else crop.copy()
 
 
-def fetch_t2m(times: pd.DatetimeIndex, workers: int = 16) -> np.ndarray:
-    """CONUS 2 m temperature in kelvin, shape (len(times), NLAT, NLON)."""
+def fetch_t2m(times: pd.DatetimeIndex, workers: int = 16) -> tuple[pd.DatetimeIndex, np.ndarray]:
+    """CONUS 2 m temperature in kelvin for the hours that exist: (times, (n, NLAT, NLON))."""
     s = _session()
     with ThreadPoolExecutor(max_workers=workers) as pool:
         fields = list(pool.map(lambda t: _fetch_one(s, t), times))
-    out = np.stack(fields)
-    if np.isnan(out).any():
-        raise ValueError("ERA5 returned missing values; the requested hours may not be published yet")
-    return out
+    keep = [i for i, f in enumerate(fields) if f is not None]
+    if not keep:
+        return pd.DatetimeIndex([]), np.empty((0, grid.NLAT, grid.NLON), dtype=np.float32)
+    return times[keep], np.stack([fields[i] for i in keep])

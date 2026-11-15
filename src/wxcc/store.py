@@ -2,15 +2,20 @@
 
 Layout (one schema for every model, analysis or forecast):
 
-    data/regional/<model>/analysis/<YYYY-MM>.parquet     keyed by valid month
-    data/regional/<model>/forecast/<YYYY>/<YYYYMMDDHH>.parquet   one per run
+    data/regional/analysis/<model>/<YYYY-MM>.parquet    truth, by valid month
+    data/regional/forecast/<YYYY>/<YYYYMMDD>.parquet    every model's runs started that day
+    data/regional/lab/<model>/<YYYYMMDDHH>.parquet      runs made in the Colab lab
 
-Forecast files are written once per run and never rewritten, so git history
-grows only by the size of the new data. Analysis files are upserted by key.
+One file per init day keeps the repo small (a file per run is mostly Parquet
+overhead) while only the last few days' files ever change, so git history
+grows roughly with the data. All writes are upserts by key, so re-running any
+job is safe.
 """
 
 from __future__ import annotations
 
+import json
+import threading
 from pathlib import Path
 
 import duckdb
@@ -33,7 +38,7 @@ COLUMNS = [
     "hdd",
     "cdd",
     "tmean_f",  # population-weighted daily temperature
-    "quality",  # final | prelim (ERA5T) | forecast
+    "quality",  # final | prelim (ERA5T) | provisional (GFS analysis) | forecast
     "source",
     "pipeline_version",
 ]
@@ -55,9 +60,9 @@ def make_rows(
         {
             "valid_date": np.repeat(days.to_numpy(), n_regions),
             "region": np.tile(np.array(REGIONS), n_days),
-            "hdd": np.round(regional["hdd"].reshape(-1), 3),
-            "cdd": np.round(regional["cdd"].reshape(-1), 3),
-            "tmean_f": np.round(regional["tmean_f"].reshape(-1), 3),
+            "hdd": np.round(regional["hdd"].reshape(-1), 2).astype(np.float32),
+            "cdd": np.round(regional["cdd"].reshape(-1), 2).astype(np.float32),
+            "tmean_f": np.round(regional["tmean_f"].reshape(-1), 2).astype(np.float32),
         }
     )
     df["model"] = model
@@ -95,26 +100,101 @@ def _upsert(path: Path, new: pd.DataFrame) -> int:
 def write_analysis(df: pd.DataFrame, root: Path = ROOT) -> list[Path]:
     paths = []
     for (model, month), part in df.groupby(["model", df["valid_date"].dt.strftime("%Y-%m")]):
-        path = root / model / "analysis" / f"{month}.parquet"
+        path = root / "analysis" / model / f"{month}.parquet"
         _upsert(path, part)
         paths.append(path)
     return paths
 
 
-def forecast_path(model: str, init_time: pd.Timestamp, root: Path = ROOT) -> Path:
+def forecast_path(init_time: pd.Timestamp, root: Path = ROOT) -> Path:
     t = pd.Timestamp(init_time)
-    return root / model / "forecast" / f"{t:%Y}" / f"{t:%Y%m%d%H}.parquet"
+    return root / "forecast" / f"{t:%Y}" / f"{t:%Y%m%d}.parquet"
 
 
-def write_forecast(df: pd.DataFrame, root: Path = ROOT) -> Path:
-    path = forecast_path(df["model"].iloc[0], df["init_time"].iloc[0], root)
-    _upsert(path, df)
+def lab_path(model: str, init_time: pd.Timestamp, root: Path = ROOT) -> Path:
+    return root / "lab" / model / f"{pd.Timestamp(init_time):%Y%m%d%H}.parquet"
+
+
+def write_forecast(df: pd.DataFrame, root: Path = ROOT, lab: bool = False) -> Path:
+    model, init = df["model"].iloc[0], df["init_time"].iloc[0]
+    path = lab_path(model, init, root) if lab else forecast_path(init, root)
+    with _write_lock:
+        _upsert(path, df)
     return path
+
+
+def stored_runs(model: str, start: pd.Timestamp, end: pd.Timestamp, root: Path = ROOT) -> set[pd.Timestamp]:
+    """Init times already stored for a model between two dates (inclusive)."""
+    out: set[pd.Timestamp] = set()
+    for day in pd.date_range(pd.Timestamp(start).normalize(), pd.Timestamp(end).normalize(), freq="D"):
+        path = forecast_path(day, root)
+        if path.exists():
+            df = pd.read_parquet(path, columns=["model", "init_time"])
+            out.update(pd.DatetimeIndex(df.loc[df["model"] == model, "init_time"].unique()))
+    return out
+
+
+MANIFESTS = Path("data/manifests")
+_pending_manifests: list[dict] = []
+_manifest_lock = threading.Lock()
+_write_lock = threading.Lock()
+
+
+def write_manifest(*, model: str, init_time: pd.Timestamp, source: str, method: str, n_steps: int,
+                   missing_steps: list[int], first_valid: pd.Timestamp, last_valid: pd.Timestamp,
+                   detail: dict | None = None, extra: dict | None = None) -> dict:
+    """Queue a run manifest: what was fetched, from where, with which settings."""
+    record = {
+        "model": model,
+        "init_time": f"{pd.Timestamp(init_time):%Y-%m-%dT%H:%M}Z",
+        "variables": ["t2m"],
+        "method": method,
+        "source": source,
+        "n_steps": int(n_steps),
+        "missing_steps": [int(s) for s in missing_steps],
+        "first_valid": f"{pd.Timestamp(first_valid):%Y-%m-%d}",
+        "last_valid": f"{pd.Timestamp(last_valid):%Y-%m-%d}",
+        "pipeline_version": __version__,
+        "written_at": f"{pd.Timestamp.now(tz='UTC'):%Y-%m-%dT%H:%M}Z",
+        "detail": detail or {},
+    }
+    record.update(extra or {})
+    with _manifest_lock:
+        _pending_manifests.append(record)
+    return record
+
+
+def flush_manifests(root: Path | None = None) -> int:
+    """Append queued manifests to data/manifests/<model>/<year>.jsonl (one line per run)."""
+    root = root or MANIFESTS
+    with _manifest_lock:
+        pending, _pending_manifests[:] = list(_pending_manifests), []
+    by_file: dict[Path, list[dict]] = {}
+    for rec in pending:
+        by_file.setdefault(root / rec["model"] / f"{rec['init_time'][:4]}.jsonl", []).append(rec)
+    for path, records in by_file.items():
+        existing = {}
+        if path.exists():
+            for line in path.read_text().splitlines():
+                if line.strip():
+                    rec = json.loads(line)
+                    existing[rec["init_time"]] = rec
+        existing.update({r["init_time"]: r for r in records})
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("".join(json.dumps(existing[k], sort_keys=True) + "\n" for k in sorted(existing)))
+    return len(pending)
+
+
+def read_manifests(model: str | None = None, root: Path | None = None) -> pd.DataFrame:
+    root = root or MANIFESTS
+    files = sorted(root.glob(f"{model or '*'}/*.jsonl"))
+    records = [json.loads(line) for f in files for line in f.read_text().splitlines() if line.strip()]
+    return pd.DataFrame(records)
 
 
 def stored_analysis_days(model: str, method: str, root: Path = ROOT) -> dict[pd.Timestamp, str]:
     """Days already stored for an analysis model -> their quality flag."""
-    files = sorted((root / model / "analysis").glob("*.parquet"))
+    files = sorted((root / "analysis" / model).glob("*.parquet"))
     if not files:
         return {}
     df = pd.concat(pd.read_parquet(f, columns=["valid_date", "method", "quality"]) for f in files)

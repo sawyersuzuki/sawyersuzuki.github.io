@@ -63,7 +63,7 @@ def test_weight_rows_sum_to_one_and_conus_is_population_share():
     assert (w >= 0).all()
     # CONUS weights are the population-share-weighted blend of division weights
     share = cells.groupby("division")["population"].sum() / cells["population"].sum()
-    blend = sum(share[r] * w[i] for i, r in enumerate(REGIONS) if r != CONUS)
+    blend = sum(share[r] * w[i] for i, r in enumerate(REGIONS) if r in DIVISIONS)
     np.testing.assert_allclose(w[REGIONS.index(CONUS)], blend)
 
 
@@ -89,6 +89,23 @@ def test_hdd_must_be_computed_before_averaging():
     enc = REGIONS.index("ENC")
     assert weights.regional_mean(dd.hdd(t_f), w)[enc] == pytest.approx(5.0)
     assert dd.hdd(weights.regional_mean(t_f, w)[enc]) == pytest.approx(0.0)
+
+
+def test_state_regions_use_only_their_states():
+    cells = weights.build_cell_population(full_tracts())
+    w = weights.weight_matrix(cells)
+    tx = cells[cells["state"] == "48"]
+    expected = np.zeros(grid.NLAT * grid.NLON)
+    np.add.at(expected, tx["row"].to_numpy() * grid.NLON + tx["col"].to_numpy(), tx["population"].to_numpy(float))
+    np.testing.assert_allclose(w[REGIONS.index("TX")], expected / expected.sum())
+    pnw = w[REGIONS.index("PNW")]
+    others = cells[~cells["state"].isin(["41", "53"])]
+    only_others = np.setdiff1d(
+        others["row"] * grid.NLON + others["col"],
+        (cells[cells["state"].isin(["41", "53"])]["row"] * grid.NLON
+         + cells[cells["state"].isin(["41", "53"])]["col"]),
+    )
+    assert pnw[only_others].sum() == 0
 
 
 def test_missing_region_raises():

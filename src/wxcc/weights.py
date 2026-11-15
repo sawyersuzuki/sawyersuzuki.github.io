@@ -18,7 +18,7 @@ import pandas as pd
 import requests
 
 from . import grid
-from .regions import CONUS, REGIONS, STATE_TO_DIVISION
+from .regions import CONUS, DIVISIONS, EXTRA_REGIONS, REGIONS, STATE_TO_DIVISION
 
 CENSUS_URL = (
     "https://www2.census.gov/geo/docs/reference/cenpop2020/tract/CenPop2020_Mean_TR.txt"
@@ -36,20 +36,20 @@ def fetch_tract_centres(url: str = CENSUS_URL) -> pd.DataFrame:
 
 
 def build_cell_population(tracts: pd.DataFrame) -> pd.DataFrame:
-    """Aggregate tract populations to grid cells: one row per (cell, division)."""
+    """Aggregate tract populations to grid cells: one row per (state, cell)."""
     df = tracts[tracts["STATEFP"].isin(STATE_TO_DIVISION)].copy()
     row, col, inside = grid.nearest_index(df["LATITUDE"].to_numpy(), df["LONGITUDE"].to_numpy())
     df["row"], df["col"] = row, col
     df["division"] = df["STATEFP"].map(STATE_TO_DIVISION)
     df = df[inside & (df["POPULATION"] > 0)]
     out = (
-        df.groupby(["division", "row", "col"], as_index=False)["POPULATION"]
+        df.groupby(["STATEFP", "division", "row", "col"], as_index=False)["POPULATION"]
         .sum()
-        .rename(columns={"POPULATION": "population"})
+        .rename(columns={"POPULATION": "population", "STATEFP": "state"})
     )
     out["lat"] = grid.LATS[out["row"]]
     out["lon"] = grid.LONS[out["col"]]
-    return out.sort_values(["division", "row", "col"]).reset_index(drop=True)
+    return out.sort_values(["state", "row", "col"]).reset_index(drop=True)
 
 
 def weight_matrix(cells: pd.DataFrame) -> np.ndarray:
@@ -58,7 +58,12 @@ def weight_matrix(cells: pd.DataFrame) -> np.ndarray:
     flat = cells["row"].to_numpy() * grid.NLON + cells["col"].to_numpy()
     pop = cells["population"].to_numpy(dtype=float)
     for i, region in enumerate(REGIONS):
-        sel = np.ones(len(cells), bool) if region == CONUS else (cells["division"] == region).to_numpy()
+        if region == CONUS:
+            sel = np.ones(len(cells), bool)
+        elif region in DIVISIONS:
+            sel = (cells["division"] == region).to_numpy()
+        else:
+            sel = cells["state"].isin(EXTRA_REGIONS[region][1]).to_numpy()
         np.add.at(w[i], flat[sel], pop[sel])
         total = w[i].sum()
         if total <= 0:
@@ -69,7 +74,8 @@ def weight_matrix(cells: pd.DataFrame) -> np.ndarray:
 
 def regional_mean(field: np.ndarray, w: np.ndarray) -> np.ndarray:
     """Population-weighted regional means of ``field`` (..., NLAT, NLON) -> (..., n_regions)."""
-    flat = np.asarray(field, dtype=np.float64).reshape(*field.shape[:-2], -1)
+    field = np.asarray(field, dtype=np.float64)
+    flat = field.reshape(field.shape[:-2] + (field.shape[-2] * field.shape[-1],))
     return flat @ w.T
 
 
