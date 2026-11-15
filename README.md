@@ -102,7 +102,7 @@ Downloads are streamed and cropped to CONUS in memory; no global file is ever wr
 
 ## Automation
 
-`.github/workflows/update.yml` runs at 10:17 and 22:17 UTC: update, build, publish maps, commit data. It uses about 300 of the 2,000 free Actions minutes a month on a private repository. The built dashboard is attached to each run as a downloadable artifact. When the repository is made public, the same workflow deploys the dashboard to GitHub Pages (enable it under Settings > Pages > Source: GitHub Actions).
+`.github/workflows/update.yml` runs at 10:17 and 22:17 UTC: update, build, publish maps, commit data. It uses about 300 of the 2,000 free Actions minutes a month on a private repository. The built dashboard is attached to each run as a downloadable artifact. The same workflow can deploy the dashboard to GitHub Pages; that needs a public repository, Pages enabled (Settings > Pages > Source: GitHub Actions) and a repository variable `DEPLOY_PAGES` set to `true`. A manual run of the workflow also accepts a date range to backfill 00Z runs and regenerate their maps.
 
 ## Data sources and attribution
 

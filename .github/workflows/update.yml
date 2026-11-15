@@ -7,6 +7,15 @@ on:
     - cron: "17 10 * * *"
     - cron: "17 22 * * *"
   workflow_dispatch:
+    inputs:
+      backfill_start:
+        description: "Optional: also backfill 00Z runs from this date (YYYY-MM-DD), regenerating their maps"
+        required: false
+        default: ""
+      backfill_end:
+        description: "Optional: last date of that backfill (YYYY-MM-DD)"
+        required: false
+        default: ""
 
 permissions:
   contents: write
@@ -31,6 +40,15 @@ jobs:
         run: pip install -e .
       - name: Restore recent maps from Releases
         run: wxcc fields pull || true
+      - name: Optional backfill (manual runs only)
+        if: ${{ inputs.backfill_start != '' && inputs.backfill_end != '' }}
+        env:
+          START: ${{ inputs.backfill_start }}
+          END: ${{ inputs.backfill_end }}
+        run: |
+          wxcc backfill --model all --start "$START" --end "$END" --cycles 0 --refresh --yes
+          wxcc backfill --model era5 --start "$START" --end "$END" --refresh --yes
+          wxcc fields publish --all || true
       - name: Fetch latest runs, truth and market data
         run: wxcc update
       - name: Build dashboard
@@ -56,11 +74,12 @@ jobs:
           path: site/index.html
           retention-days: 3
 
-  # Publishes the dashboard to GitHub Pages once the repository is public.
-  # (Pages is not available for private repositories on the Free plan.)
-  # To enable: make the repo public, then Settings > Pages > Source: GitHub Actions.
+  # Publishes the dashboard to GitHub Pages. Off until you opt in, so the job never fails by surprise:
+  #   1. the repository must be public (Pages is not available for private repos on the Free plan)
+  #   2. Settings > Pages > Source: GitHub Actions
+  #   3. Settings > Secrets and variables > Actions > Variables: add DEPLOY_PAGES = true
   pages:
-    if: ${{ !github.event.repository.private }}
+    if: ${{ vars.DEPLOY_PAGES == 'true' }}
     needs: update
     runs-on: ubuntu-latest
     permissions:
