@@ -107,7 +107,8 @@ def query(
         typer.echo("No rows match.")
         return
     cols = ["model", "init_time", "valid_date", "lead_days", "region", "method", "hdd", "cdd", "tmean_f", "quality"]
-    out = df[cols].assign(valid_date=df["valid_date"].dt.date)
+    out = df[cols].assign(valid_date=df["valid_date"].dt.date,
+                          **{c: df[c].astype(float).round(2) for c in ("hdd", "cdd", "tmean_f")})
     typer.echo(out.to_csv(index=False) if csv else out.to_string(index=False))
 
 

@@ -581,7 +581,7 @@ function divColor(t) { // t in [-1, 1] -> rgb through a neutral midpoint
 }
 function viewMaps() {
   mapsInit(); const box = $("p-maps"); box.replaceChildren();
-  if (!MAPS) { $("p-title").textContent = "No maps stored yet"; box.append(el("div", { class: "empty", text: "Maps appear after `wxcc update` has stored a 00Z run." })); return; }
+  if (!MAPS) { $("p-title").textContent = "No maps stored yet"; box.append(el("div", { class: "empty", text: "No maps in the local cache. Run `wxcc fields pull` to download recent ones, or `wxcc update` after the next 00Z runs are out, then rebuild." })); return; }
   const { ny, nx, d0 } = MAPS, cells = ny * nx, L = S.pday, ms = active().filter((m) => MAPS.arr[m.id]);
   const get = (id) => MAPS.arr[id].subarray(L * cells, (L + 1) * cells);
   const haveDay = ms.filter((m) => get(m.id)[Math.floor(cells / 2)] !== MISS);

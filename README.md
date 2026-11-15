@@ -22,6 +22,8 @@ uv venv && uv pip install -e ".[dev]"
 
 The repository's scheduled workflow runs `update` twice a day and commits the result, so on most days `git pull` followed by `wxcc serve` is all you need.
 
+Maps are kept out of git. On a fresh clone the Maps tab is empty until you run `wxcc fields pull` (needs the GitHub CLI, signed in) or `wxcc update` picks up the next 00Z runs.
+
 ## Commands
 
 | Command | What it does |
