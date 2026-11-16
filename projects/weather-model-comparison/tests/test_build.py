@@ -67,9 +67,9 @@ def test_build_writes_a_self_contained_page(tmp_path, monkeypatch):
     assert html.index("<title>") < html.index("</head>") < html.index("<body>")
     assert '"inits":["2025-01-10T00"]' in html
     assert not (tmp_path / "site" / "fragment.html").read_text().startswith("<!doctype")
-    assert "home-link" not in html.split("<style>")[1].split("</style>")[1]  # no link unless asked
+    assert '<nav class="site">' not in html  # no website nav unless asked
     linked = build.build(site=tmp_path / "site2", root=tmp_path / "regional", home_link="/projects.html").read_text()
-    assert '<a class="home-link" href="/projects.html">' in linked
+    assert '<a href="/projects.html" class="active">Projects</a>' in linked and "<!--SITE_NAV-->" not in linked
     assert "<title>Weather Model Comparison</title>" in linked
 
 

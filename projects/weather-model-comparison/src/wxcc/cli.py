@@ -158,7 +158,7 @@ def market() -> None:
 @app.command()
 def build(
     out_dir: str = typer.Option("site", "--out", help="Folder to write index.html into"),
-    home_link: str = typer.Option("", help="URL for a link back to the website, e.g. /projects.html"),
+    home_link: str = typer.Option("", help="URL of the Projects page; adds the website navigation bar, e.g. /projects.html"),
 ) -> None:
     """Rebuild the dashboard (site/index.html) from what is stored."""
     from pathlib import Path
