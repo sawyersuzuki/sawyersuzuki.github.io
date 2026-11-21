@@ -383,6 +383,7 @@ date,zone,price
 2026-11-17,caiso_sp15,27.39
 2026-11-18,caiso_sp15,41.03
 2026-11-19,caiso_sp15,37.86
+2026-11-20,caiso_sp15,20.54
 2025-11-01,miso_indiana,44.38
 2025-11-02,miso_indiana,33.11
 2025-11-03,miso_indiana,37.99
@@ -767,6 +768,7 @@ date,zone,price
 2026-11-17,miso_indiana,39.8
 2026-11-18,miso_indiana,39.58
 2026-11-19,miso_indiana,34.94
+2026-11-20,miso_indiana,39.91
 2025-11-01,miso_minn,44.25
 2025-11-02,miso_minn,16.42
 2025-11-03,miso_minn,33.04
@@ -1151,6 +1153,7 @@ date,zone,price
 2026-11-17,miso_minn,16.14
 2026-11-18,miso_minn,8.08
 2026-11-19,miso_minn,21.67
+2026-11-20,miso_minn,7.67
 2025-11-01,nyiso_nyc,47.63
 2025-11-02,nyiso_nyc,49.36
 2025-11-03,nyiso_nyc,56.71
